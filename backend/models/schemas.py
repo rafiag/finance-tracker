@@ -34,7 +34,8 @@ class TransactionUpdate(BaseModel):
 class InvestmentCreate(BaseModel):
     """Model for creating a new investment (stock purchase)."""
     symbol: str = Field(..., description="Stock ticker symbol")
-    shares: float = Field(..., gt=0, description="Number of shares")
+    amount: float = Field(..., gt=0, description="Total Investment Amount in IDR")
+    shares: Optional[float] = Field(None, gt=0, description="Number of shares (calculated if not provided)")
     price: float = Field(..., gt=0, description="Price per share")
     account: str = Field(..., description="Investment account (e.g., RDN Wallet)")
     source_account: Optional[str] = Field(None, description="Source bank account for transfer tracking")

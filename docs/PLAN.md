@@ -1,7 +1,7 @@
-# Project: AI-Powered Telegram Finance Tracker (Monsy Inspired)
+# Project: AI-Powered Telegram Finance Tracker
 
 ## 1. Project Overview
-An automated system to track personal expenses and income via Telegram, featuring a modern dashboard inspired by Monsy.app.
+An automated system to track personal expenses and income via Telegram, featuring a modern dashboard with AI processing.
 - **Input:** Text or Images (Invoices/Receipts) sent to Telegram.
 - **Processing:** Python (FastAPI) + Gemini 1.5 Flash (LLM).
 - **Storage:** Google Sheets (Relational Database structure).
@@ -19,7 +19,7 @@ An automated system to track personal expenses and income via Telegram, featurin
     - Appends data to GSheets. (Images are processed and discarded, not stored).
 3. **Gemini 1.5 Flash:** Maps messy input to specific GSheet categories and subcategories. Handles complex receipt scanning.
 4. **Google Sheets:** Stores Transactions, Categories/Subcategories, Accounts (Assets), and Budgets.
-5. **Next.js Dashboard (Monsy-Style UI):**
+5. **Next.js Dashboard:**
     - **Sidebar Navigation:** Dashboard, Transactions, Budget, Assets, Settings.
     - **Card-Based Overview:** Large metrics for Income (Teal), Expenses (Red).
     - **Visualizations:** Recharts for Activity Line Chart, Category Distribution (Pie), and Budget Usage.
@@ -62,43 +62,33 @@ Create Spreadsheet with:
     - **Review Flag:** When AI confidence is low, mark transaction with `needs_review: true` for manual verification on dashboard.
 - [x] **GSheet Connector:** `gspread` for CRUD operations across all tabs.
 - [x] **Dashboard API Endpoints:** REST endpoints for frontend data fetching (transactions, investments, categories, accounts, budgets, summary).
-- [ ] **Market Data Service:** (Phase 4) Integrate a light service (e.g., `yfinance` or a simple web scraper) to update `Current Price` in the `Investments` tab for real-time P/L calculation on the dashboard.
 
 ---
 
-### Phase 4: Monsy-Inspired Dashboard (Next.js)
-- [ ] **Project Setup:**
-    - Initialize Next.js 14+ with App Router, TypeScript, and Tailwind CSS.
-    - Install shadcn/ui components (Card, Button, Table, Dialog, Select, etc.).
-    - Install Recharts for data visualizations.
-- [ ] **Design System & Layout:**
-    - Implement Tailwind config for Monsy color palette (Teal for income, Red for expenses).
-    - Custom CSS for premium look (rounded corners, soft shadows, glassmorphism).
-    - Responsive sidebar navigation: **Dashboard**, **Assets**, **Budget**, **Expenses**, **Transfer**, **Transactions**.
-    - Year/Month global filters at the top right of the application.
-- [ ] **Dashboard Overview:**
-    - **Income Card**: Main focus card showing total income, donut chart breakdown of sources, and % change.
-    - **Quick Summary**: Small cards for "Total Saving" and "Total Expenses" with trend indicators.
-    - **Account Balances**: Side scrollable or list of current bank/e-wallet account states.
-    - **Expense Activity**: Interactive daily area chart showing spending trends for the selected month.
-- [ ] **Expenses Page:**
-    - **Expenses Distribution**: Donut chart showing category-wise expense breakdown.
-    - **Category Breakdown Table**: List of expense categories with amounts and percentages.
-    - **Date Range Filter**: Filter expenses by month/custom date range.
-- [ ] **Assets & Portfolio Page:**
-    - **Net Worth Overview**: Area chart showing net worth growth over time.
-    - **Balances Breakdown**: Donut chart and legend for Assets vs. Transaction accounts.
-    - **Overall Balances Table**: Detailed list showing Account, Type, Current Balance, In/Out flows.
-    - **Stock Holdings Table**: Comprehensive view including Account, Symbol, Shares, Avg. Buy Price, Purchase Date, Current Price (Market), Total Market Value, and Potential P/L (Color-coded).
-- [ ] **Budget & Transaction Management:**
-    - **Budget Progress**: Card-based summary with category progress bars, "Safe" vs. "Over Budget" badges.
-    - **Transactions Table**: Searchable, filterable list with capability to edit/delete records.
-    - **Review Queue**: Flagged transactions (low AI confidence) displayed for manual category/account verification.
-- [ ] **Add Record Modals:**
-    - **Add Expense**: Date, Account, Category, Subcategory, Amount, Description fields.
-    - **Add Income**: Date, Account, Category, Amount, Description fields.
-    - **Add Transfer**: From Account, To Account, Amount, Date fields.
-    - **Add Stock**: Symbol, Shares, Purchase Price, Purchase Date fields.
+### Phase 4: Dashboard (Next.js)
+> **Detailed Requirements:** See `docs/PHASE4_FRONTEND.md`
+
+**Overview:**
+Build a modern, premium web dashboard for visualizing and managing financial data.
+
+**Core Pages:**
+- [ ] **Dashboard Overview** - Income/expense summary, account balances, activity charts, pending review indicator
+- [ ] **Assets & Portfolio** - Net worth tracking, transaction accounts table, stock holdings with real-time market data
+- [ ] **Budget Management** - Current month budget progress, historical category performance
+- [ ] **Transactions & Expenses** - Unified transaction table with edit/delete/approve functionality, expense distribution charts
+- [ ] **Settings** - Manage accounts, categories/subcategories, and budget limits
+
+**Key Features:**
+- [ ] Unified "Add Record" quick action modal (Expense/Income/Transfer/Stock)
+- [ ] Transaction edit/approval workflow for flagged and normal transactions
+- [ ] Year/Month global filters (Dashboard and Transactions pages)
+- [ ] Market data integration for real-time stock prices and P/L calculations
+- [ ] Responsive design with modern aesthetic (Teal/Red color scheme)
+
+**Tech Stack:**
+- Next.js 14+ (App Router) + TypeScript + Tailwind CSS
+- shadcn/ui components + Recharts for visualizations
+- API integration with FastAPI backend (authenticated via API key)
 
 ### Phase 5: Deployment & Polish
 - [ ] **Railway Configuration:**
@@ -151,8 +141,9 @@ project-root/
 │   ├── reference/             # UI/UX design references
 │   ├── BACKEND.md             # Backend architecture details
 │   ├── BACKEND_CODE_REVIEW.md # Code quality tracking
+│   ├── PHASE4_FRONTEND.md     # Frontend requirements & specifications
 │   └── PLAN.md                # Project roadmap
-├── frontend/                  # [Phase 4] Next.js Dashboard (Planned)
+├── frontend/                  # Next.js Dashboard
 ├── AGENTS.md                  # Collaboration guidelines
 ├── docker-compose.yml         # Container orchestration
 └── README.md                  # Project overview

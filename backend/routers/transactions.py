@@ -107,23 +107,33 @@ async def create_investment(
 
         # Extract and validate values
         symbol = investment.symbol.upper()
-        shares = investment.shares
+        amount_idr = investment.amount
         price = investment.price
         account = investment.account
         source_account = investment.source_account
         currency = investment.currency
         purchase_date = investment.date or datetime.now().strftime('%Y-%m-%d')
 
-        total_cost = shares * price
-
-        # Get exchange rate for USD transactions (Issue 2.2 fix)
+        # Get exchange rate for USD transactions
         exchange_rate = 1.0
         if currency == Currency.USD.value:
             exchange_rate = await get_usd_to_idr_rate()
             logger.info(f"Dashboard investment: Using USD/IDR exchange rate: {exchange_rate}")
 
-        # Convert to IDR for transaction log (all transactions stored in IDR)
-        total_cost_idr = convert_usd_to_idr(total_cost, exchange_rate) if currency == Currency.USD.value else total_cost
+        # Calculate Shares
+        # Logic: Amount (IDR) / Price (IDR)
+        # If USD, Price (IDR) = Price (USD) * Rate
+        price_idr = price * exchange_rate if currency == Currency.USD.value else price
+        
+        shares = 0
+        if price_idr > 0:
+            shares = amount_idr / price_idr
+            
+        # Total cost is the amount entered
+        total_cost_idr = amount_idr
+
+        # Calculate Price in Native Currency for Investment Sheet (just the input price)
+        price_native = price
 
         # Track flag reasons
         flag_reasons = []
@@ -148,6 +158,7 @@ async def create_investment(
         status = "Flagged" if is_flagged else "Normal"
 
         # Create transfer entries for money flow tracking using helper function (Issue 5.1)
+        # Transfer is always in IDR
         create_transfer_pair(
             sheets=sheets,
             date=purchase_date,
@@ -171,10 +182,11 @@ async def create_investment(
         )
 
         # Update investments sheet with currency and exchange rate (Issue 2.3 fix)
+        # update_investment expects price in native currency
         sheets.update_investment(
             symbol=symbol,
             shares_change=shares,
-            price=price,
+            price=price_native,
             account=account,
             purchase_date=purchase_date,
             currency=currency,
@@ -189,7 +201,7 @@ async def create_investment(
                 "symbol": symbol,
                 "shares": shares,
                 "price": price,
-                "total_cost": total_cost,
+                "total_cost": total_cost_idr,
                 "account": account,
                 "source_account": source_account,
                 "currency": currency,

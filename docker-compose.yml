@@ -15,3 +15,17 @@ services:
       # - DASHBOARD_API_KEY=${DASHBOARD_API_KEY}
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finance-tracker-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_KEY=de4e668814ed4127688bbe59666542f21a78fa05df0b7029e7db9b3fc059156c
+    depends_on:
+      - backend
+    restart: always

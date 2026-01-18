@@ -34,7 +34,7 @@ async def get_transactions(
 
 
 @router.get("/investments")
-@limiter.limit("30/minute")
+@limiter.limit("100/minute")
 async def get_investments(request: Request, api_key: str = Security(verify_api_key)):
     """
     Get all investment holdings.
@@ -121,7 +121,7 @@ async def get_accounts(api_key: str = Security(verify_api_key)):
 
 
 @router.get("/budgets")
-@limiter.limit("30/minute")
+@limiter.limit("100/minute")
 async def get_budgets(request: Request, api_key: str = Security(verify_api_key)):
     """
     Get all budget records.
@@ -140,7 +140,7 @@ async def get_budgets(request: Request, api_key: str = Security(verify_api_key))
 
 
 @router.get("/summary")
-@limiter.limit("30/minute")
+@limiter.limit("100/minute")
 async def get_summary(
     request: Request,
     year: int = None,
@@ -209,7 +209,7 @@ async def get_summary(
 
 
 @router.get("/account-balances")
-@limiter.limit("30/minute")
+@limiter.limit("100/minute")
 async def get_account_balances(request: Request, api_key: str = Security(verify_api_key)):
     """
     Get account balances from the Settings_Accounts sheet.
@@ -241,7 +241,7 @@ async def get_account_balances(request: Request, api_key: str = Security(verify_
 
 
 @router.get("/daily-expenses")
-@limiter.limit("30/minute")
+@limiter.limit("100/minute")
 async def get_daily_expenses(
     request: Request,
     year: int = None,
@@ -276,7 +276,7 @@ async def get_daily_expenses(
 
 
 @router.get("/budget-progress")
-@limiter.limit("30/minute")
+@limiter.limit("100/minute")
 async def get_budget_progress(
     request: Request,
     year: int = None,
