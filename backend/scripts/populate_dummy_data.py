@@ -60,8 +60,8 @@ INCOME_NOTES = [
 ]
 
 TRANSFER_NOTES = [
-    'Transfer to savings', 'Top up e-wallet', 'Move funds between accounts', 
-    'Emergency fund allocation', 'Investment transfer'
+    'Transfer to savings', 'Top up e-wallet', 'Move funds between accounts',
+    'Emergency fund allocation', 'Investment funding', 'Monthly allocation'
 ]
 
 

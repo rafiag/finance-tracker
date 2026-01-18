@@ -39,9 +39,12 @@ An automated system to track personal expenses and income via Telegram, featurin
 ### Phase 2: Database Schema (Google Sheets)
 Create Spreadsheet with:
 - **`Transactions`**: `Date | Account | Category | Subcategory | Description | Amount | Type (Inc/Exp/Transfer/Asset) | Status (normal/flagged)`.
-  - *Note: For transfers, the Description field notes the counter account (e.g., "Transfer to RDN"). Two rows are created: one debit from source account, one credit to destination account.*
+  - *Note: For transfers, two rows are created:*
+    - *Source account row: Subcategory = "Transfer-Out", Description = "Transfer to {destination}"*
+    - *Destination account row: Subcategory = "Transfer-In", Description = "Transfer from {source}"*
 - **`Investments`**: `Purchase Date | Account | Symbol | Shares | Avg Buy Price | Currency | Total Value (USD) | Total Value (IDR) | Realized P/L`.
 - **`Categories`**: `Category | Subcategory | Type (Income/Expense/Transfer/Investment)`.
+  - *Note: Transfer category has two subcategories: Transfer-In and Transfer-Out*
 - **`Accounts`**: `Account Name | Currency | Balance | Type (Bank/Cash/Investment/RDN)`.
 - **`Budgets`**: `Category | Monthly Budget | Effective From` (Category level only).
 

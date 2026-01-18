@@ -56,7 +56,7 @@ backend/
 | Date | String | YYYY-MM-DD format |
 | Account | String | Source account name |
 | Category | String | Main category |
-| Subcategory | String | Subcategory |
+| Subcategory | String | Subcategory (for Transfer: Transfer-In or Transfer-Out) |
 | Description | String | Transaction note |
 | Amount | Number | Amount in IDR (Global Standard) |
 | Type | String | Expense/Income/Transfer/Asset |
@@ -79,7 +79,7 @@ backend/
 | Column | Type | Description |
 |--------|------|-------------|
 | Category | String | Main category name |
-| Subcategory | String | Subcategory name |
+| Subcategory | String | Subcategory name (Transfer uses: Transfer-In, Transfer-Out) |
 | Type | String | Expense/Income/Transfer/Investment |
 
 ### Settings_Accounts Tab
@@ -145,7 +145,9 @@ backend/
 5. **AI Processing**: Send to Gemini with context for parsing
 6. **Transaction Creation**:
    - Regular (Expense/Income): Single row appended
-   - Transfer: Two rows (debit source, credit destination)
+   - Transfer: Two rows created with subcategories:
+     - Source account: Subcategory = "Transfer-Out"
+     - Destination account: Subcategory = "Transfer-In"
    - Trade_Buy: Transfer entries (if source_account provided) + Asset transaction + portfolio update
    - Trade_Sell: Two transactions (Return of Capital + Capital Gain) + portfolio update
 7. **Confirmation**: Send formatted message back to user
@@ -156,8 +158,8 @@ backend/
 When purchasing stocks, the system tracks the complete money flow:
 
 1. **If source_account is provided** (e.g., "Buy BBCA using BCA"):
-   - Create Transfer OUT from source bank account (e.g., BCA)
-   - Create Transfer IN to RDN/investment account
+   - Create Transfer-Out from source bank account (e.g., BCA) with Subcategory = "Transfer-Out"
+   - Create Transfer-In to RDN/investment account with Subcategory = "Transfer-In"
    - This properly tracks money leaving your bank and arriving at your brokerage
 
 2. **Create Asset-type transaction** (debit from RDN account)
@@ -168,11 +170,11 @@ When purchasing stocks, the system tracks the complete money flow:
    - If new symbol: Create new row
 
 **Example transaction flow for "Buy 100 BBCA at 9000 using BCA":**
-| Date | Account | Category | Type | Amount | Note |
-|------|---------|----------|------|--------|------|
-| 2026-01-18 | BCA | Transfer | Transfer | 900,000 | Transfer to RDN for BBCA purchase |
-| 2026-01-18 | RDN Wallet | Transfer | Transfer | 900,000 | Transfer from BCA for BBCA purchase |
-| 2026-01-18 | RDN Wallet | Investment | Asset | 900,000 | Buy BBCA (IDR) |
+| Date | Account | Category | Subcategory | Type | Amount | Note |
+|------|---------|----------|-------------|------|--------|------|
+| 2026-01-18 | BCA | Transfer | Transfer-Out | Transfer | 900,000 | Transfer to RDN for BBCA purchase |
+| 2026-01-18 | RDN Wallet | Transfer | Transfer-In | Transfer | 900,000 | Transfer from BCA for BBCA purchase |
+| 2026-01-18 | RDN Wallet | Investment | Stocks | Asset | 900,000 | Buy BBCA (IDR) |
 
 ### Sell Flow
 1. Look up average buy price from portfolio

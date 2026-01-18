@@ -264,6 +264,16 @@ async def process_transaction(
         source_account = transaction_data.source_account
         rdn_account = transaction_data.account  # Investment/RDN account
 
+        # Default investment account based on currency if not specified
+        if not rdn_account:
+            if currency == "USD":
+                rdn_account = "Pluang"
+                logger.info(f"No investment account specified for USD stock, defaulting to Pluang")
+            else:
+                rdn_account = "Stockbit"
+                logger.info(f"No investment account specified for IDR stock, defaulting to Stockbit")
+            status = "Flagged"  # Flag because investment account was assumed
+
         # Default to BCA if no source account specified, and flag for review
         if not source_account:
             source_account = "BCA"
@@ -277,7 +287,7 @@ async def process_transaction(
                 date=current_date,
                 account=source_account,
                 category="Transfer",
-                subcategory="Investment Transfer",
+                subcategory="Transfer-Out",
                 note=f"Transfer to {rdn_account} for {transaction_data.investment_symbol} purchase",
                 amount=amount_idr,
                 transaction_type="Transfer",
@@ -288,7 +298,7 @@ async def process_transaction(
                 date=current_date,
                 account=rdn_account,
                 category="Transfer",
-                subcategory="Investment Transfer",
+                subcategory="Transfer-In",
                 note=f"Transfer from {source_account} for {transaction_data.investment_symbol} purchase",
                 amount=amount_idr,
                 transaction_type="Transfer",
@@ -380,24 +390,24 @@ async def process_transaction(
         # Transfer: create two transactions (debit from source, credit to destination)
         destination = transaction_data.destination_account or "Unknown"
 
-        # Debit from source account (negative/outflow)
+        # Debit from source account (outflow) - Transfer-Out
         sheets.append_transaction(
             date=current_date,
             account=transaction_data.account,
             category=transaction_data.category,
-            subcategory=transaction_data.subcategory,
+            subcategory="Transfer-Out",
             note=f"Transfer to {destination}",
             amount=transaction_data.amount,
             transaction_type="Transfer",
             status=status
         )
 
-        # Credit to destination account (positive/inflow)
+        # Credit to destination account (inflow) - Transfer-In
         sheets.append_transaction(
             date=current_date,
             account=destination,
             category=transaction_data.category,
-            subcategory=transaction_data.subcategory,
+            subcategory="Transfer-In",
             note=f"Transfer from {transaction_data.account}",
             amount=transaction_data.amount,
             transaction_type="Transfer",
@@ -434,21 +444,39 @@ async def process_transaction(
         )
     
     # Determine actual values used (may differ from AI output due to defaults)
+    actual_account = transaction_data.account
     actual_source_account = transaction_data.source_account
     actual_is_flagged = transaction_data.is_flagged
     actual_flag_reason = transaction_data.flag_reason
 
-    # For Trade_Buy, source_account may have been defaulted to BCA
-    if transaction_data.transaction_type == "Trade_Buy" and not transaction_data.source_account:
-        actual_source_account = "BCA"
-        actual_is_flagged = True
-        actual_flag_reason = "Source account not specified - defaulted to BCA"
+    # For Trade_Buy, accounts may have been defaulted
+    if transaction_data.transaction_type == "Trade_Buy":
+        flag_reasons = []
+
+        # Check if investment account was defaulted
+        if not transaction_data.account:
+            if transaction_data.currency == "USD":
+                actual_account = "Pluang"
+                flag_reasons.append("Investment account defaulted to Pluang (USD)")
+            else:
+                actual_account = "Stockbit"
+                flag_reasons.append("Investment account defaulted to Stockbit (IDR)")
+            actual_is_flagged = True
+
+        # Check if source account was defaulted
+        if not transaction_data.source_account:
+            actual_source_account = "BCA"
+            flag_reasons.append("Source account defaulted to BCA")
+            actual_is_flagged = True
+
+        if flag_reasons:
+            actual_flag_reason = "; ".join(flag_reasons)
 
     return {
         "amount": transaction_data.amount,
         "category": transaction_data.category,
         "subcategory": transaction_data.subcategory,
-        "account": transaction_data.account,
+        "account": actual_account,
         "destination_account": transaction_data.destination_account,
         "source_account": actual_source_account,
         "note": transaction_data.note,
@@ -765,6 +793,7 @@ async def create_investment(request: Request):
         price = float(data.get('price', 0))
         account = data.get('account', '')  # RDN/Investment account
         source_account = data.get('source_account')  # Optional: bank account
+        currency = data.get('currency', 'IDR')  # Default to IDR
         purchase_date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
 
         if not symbol or shares <= 0 or price <= 0:
@@ -772,13 +801,26 @@ async def create_investment(request: Request):
 
         total_cost = shares * price
 
-        # Default to BCA if no source account specified, and flag for review
-        is_flagged = False
+        # Track flag reasons
+        flag_reasons = []
+
+        # Default investment account based on currency if not specified
+        if not account:
+            if currency == "USD":
+                account = "Pluang"
+                flag_reasons.append("Investment account defaulted to Pluang (USD)")
+            else:
+                account = "Stockbit"
+                flag_reasons.append("Investment account defaulted to Stockbit (IDR)")
+            logger.info(f"Dashboard: No investment account for {symbol}, defaulting to {account}")
+
+        # Default to BCA if no source account specified
         if not source_account:
             source_account = "BCA"
-            is_flagged = True
-            logger.info(f"Dashboard: No source account for {symbol} purchase, defaulting to BCA and flagging")
+            flag_reasons.append("Source account defaulted to BCA")
+            logger.info(f"Dashboard: No source account for {symbol} purchase, defaulting to BCA")
 
+        is_flagged = len(flag_reasons) > 0
         status = "Flagged" if is_flagged else "Normal"
 
         # Create transfer entries for money flow tracking
@@ -787,7 +829,7 @@ async def create_investment(request: Request):
             date=purchase_date,
             account=source_account,
             category='Transfer',
-            subcategory='Investment Transfer',
+            subcategory='Transfer-Out',
             note=f"Transfer to {account} for {symbol} purchase",
             amount=total_cost,
             transaction_type='Transfer',
@@ -798,7 +840,7 @@ async def create_investment(request: Request):
             date=purchase_date,
             account=account,
             category='Transfer',
-            subcategory='Investment Transfer',
+            subcategory='Transfer-In',
             note=f"Transfer from {source_account} for {symbol} purchase",
             amount=total_cost,
             transaction_type='Transfer',
@@ -826,17 +868,20 @@ async def create_investment(request: Request):
             purchase_date=purchase_date
         )
 
-        flagged_note = " (flagged - source account defaulted to BCA)" if is_flagged else ""
+        flagged_note = f" (flagged: {'; '.join(flag_reasons)})" if is_flagged else ""
         return {
             "status": "success",
-            "message": f"Added {shares} shares of {symbol} (funded from {source_account}){flagged_note}",
+            "message": f"Added {shares} shares of {symbol} to {account} (funded from {source_account}){flagged_note}",
             "investment": {
                 "symbol": symbol,
                 "shares": shares,
                 "price": price,
                 "total_cost": total_cost,
+                "account": account,
                 "source_account": source_account,
-                "is_flagged": is_flagged
+                "currency": currency,
+                "is_flagged": is_flagged,
+                "flag_reasons": flag_reasons if is_flagged else None
             }
         }
     except HTTPException:
@@ -863,24 +908,24 @@ async def create_transfer(request: Request):
         if not from_account or not to_account or amount <= 0:
             raise HTTPException(status_code=400, detail="From account, to account, and amount are required")
 
-        # Debit from source
+        # Debit from source (Transfer-Out)
         sheets.append_transaction(
             date=date,
             account=from_account,
             category='Transfer',
-            subcategory='Internal Transfer',
+            subcategory='Transfer-Out',
             note=f"Transfer to {to_account}",
             amount=amount,
             transaction_type='Transfer',
             status='Normal'
         )
 
-        # Credit to destination
+        # Credit to destination (Transfer-In)
         sheets.append_transaction(
             date=date,
             account=to_account,
             category='Transfer',
-            subcategory='Internal Transfer',
+            subcategory='Transfer-In',
             note=f"Transfer from {from_account}",
             amount=amount,
             transaction_type='Transfer',

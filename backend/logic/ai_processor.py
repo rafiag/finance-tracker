@@ -84,7 +84,9 @@ CURRENT PORTFOLIO:
 RULES:
 1. Amount: Parse Indonesian Rupiah formats (20k=20,000, 1.5jt=1,500,000, etc.) or USD formats ($100, 100 USD).
 2. Category/Subcategory: Use only from the provided list.
-3. Account: Extract or infer from context (e.g., "RDN" usually refers to an investment account).
+3. Account (CRITICAL): You MUST only use account names from the VALID ACCOUNTS list above. Never invent or guess account names.
+   - If the user mentions an account not in the list, flag the transaction and use the closest match.
+   - If no account is mentioned, use a sensible default from the list based on transaction type.
 4. Transaction Type:
    - "Expense", "Income" for regular transactions.
    - "Transfer" for money movement between accounts (e.g., "transfer 500k from BCA to Jago").
@@ -92,11 +94,12 @@ RULES:
    - "Trade_Sell" when selling an investment (e.g., "Sell 500 ARCI at 400").
 5. Note: Include relevant details (ticker symbol, store name, etc.).
 6. Investment Details: If it's a trade, extract the Symbol, Shares, and Price per share.
-7. Transfer Details: For transfers, "account" is the SOURCE, "destination_account" is the TARGET.
+7. Transfer Details: For transfers, "account" is the SOURCE, "destination_account" is the TARGET. Both must be from VALID ACCOUNTS.
 8. Trade_Buy Account Flow (IMPORTANT):
-   - "account" = the RDN/investment account where the stock will be held.
-   - "source_account" = the bank account where money comes from (e.g., "BCA", "Jago").
-   - If user says "buy BBCA using BCA", then account="RDN Wallet - Jago" (or appropriate RDN) and source_account="BCA".
+   - "account" = the RDN/investment account where the stock will be held. Must be from VALID ACCOUNTS.
+   - "source_account" = the bank account where money comes from. Must be from VALID ACCOUNTS or null.
+   - If user says "buy BBCA using BCA", then account should be the appropriate investment account from VALID ACCOUNTS and source_account="BCA".
+   - If investment account is not clear, set account to null (system will assign based on currency).
    - If source_account is not mentioned, set it to null (system will handle it).
 9. Currency Detection (IMPORTANT for Trade_Buy/Trade_Sell):
    - Detect currency from the image or message context.
