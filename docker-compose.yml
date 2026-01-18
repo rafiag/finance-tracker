@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finance-tracker-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/credentials.json:/app/credentials.json
+    restart: always
+
+# Future: Add database service here if needed (e.g., PostgreSQL for Next.js dashboard)

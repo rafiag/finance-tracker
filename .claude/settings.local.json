@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /B /S:*)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" storage/validators.py)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" test_db_manual.py)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" -m pytest tests/unit/test_config.py -v)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" -m pytest tests/unit/test_rate_limiter.py -v)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" -m pytest tests/integration/test_database.py -v)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" test_price_collector.py)",
+      "Bash(cat:*)",
+      "Bash(xargs:*)",
+      "Bash(npm *)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss init -p)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(docker compose build:*)",
+      "Bash(docker compose:*)",
+      "Bash(start mockup/index.html)",
+      "Bash(docker compose logs:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(docker compose exec:*)",
+      "Bash(docker compose exec backend python -c \"\nimport sys\nsys.path.insert\\(0, ''/app''\\)\n\n# Test the exact import pattern used in run_etl.py\nfrom backend.etl.transform import transform_games_data, transform_tweets_data, transform_pattern_data, transform_outlier_data, transform_trap_data, transform_global_stats_data\n\nprint\\(''✓ All imports from backend.etl.transform successful!''\\)\nprint\\(''✓ Backward compatibility maintained!''\\)\nprint\\(\\)\nprint\\(''Available transformer functions:''\\)\nprint\\(f''  - transform_games_data: {transform_games_data.__module__}''\\)\nprint\\(f''  - transform_tweets_data: {transform_tweets_data.__module__}''\\)\nprint\\(f''  - transform_pattern_data: {transform_pattern_data.__module__}''\\)\nprint\\(f''  - transform_outlier_data: {transform_outlier_data.__module__}''\\)\nprint\\(f''  - transform_trap_data: {transform_trap_data.__module__}''\\)\nprint\\(f''  - transform_global_stats_data: {transform_global_stats_data.__module__}''\\)\n\")",
+      "Bash(docker compose exec backend pytest:*)",
+      "Bash(mkdir:*)",
+      "Bash(venv\\\\Scripts\\\\pip.exe install -r requirements.txt)",
+      "Bash(\"./venv/Scripts/pip.exe\" install -r requirements.txt)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "context7",
+    "sequential-thinking",
+    "github"
+  ],
+  "enabledPlugins": {
+    "code-review@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": false,
+    "playwright-skill@playwright-skill": false
+  }
+}

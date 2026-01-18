@@ -1,0 +1,244 @@
+"""
+AI Processor for Finance Tracker
+Uses Gemini AI to extract transaction details from messages and images
+"""
+
+import os
+import json
+import asyncio
+import logging
+from datetime import datetime
+from typing import Optional, List, Union
+from dataclasses import dataclass
+
+from google import genai
+from google.genai import types
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TransactionData:
+    """Structured transaction data extracted by AI."""
+    amount: float
+    category: str
+    subcategory: str
+    account: str
+    note: str
+    transaction_type: str  # 'Expense', 'Income', 'Transfer', 'Trade_Buy', 'Trade_Sell'
+    is_flagged: bool
+    flag_reason: Optional[str] = None
+    confidence: float = 1.0
+    investment_symbol: Optional[str] = None
+    shares: Optional[float] = None
+    price_per_share: Optional[float] = None
+
+
+class AIProcessor:
+    """Processes messages and images using Gemini AI to extract transaction data."""
+    
+    def __init__(self):
+        """Initialize the AI processor with Gemini API key."""
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable is not set")
+        
+        # Initialize the new Google GenAI Client
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = 'gemini-2.0-flash'
+    
+    def _build_prompt(
+        self,
+        user_message: Optional[str],
+        categories_context: str,
+        accounts_context: str,
+        current_investments: str,
+        current_date: str
+    ) -> str:
+        """Build the prompt for Gemini AI."""
+        
+        prompt = f"""You are a financial transaction parser for an Indonesian user. 
+Extract transaction details from the user's message and/or image (if provided).
+
+CURRENT DATE: {current_date}
+
+VALID CATEGORIES:
+{categories_context}
+
+VALID ACCOUNTS:
+{accounts_context}
+
+CURRENT PORTFOLIO:
+{current_investments}
+
+RULES:
+1. Amount: Parse Indonesian Rupiah formats (20k=20,000, 1.5jt=1,500,000, etc.).
+2. Category/Subcategory: Use only from the provided list. 
+3. Account: Extract or infer from context (e.g., "RDN" usually refers to an investment account).
+4. Transaction Type:
+   - "Expense", "Income", "Transfer" for regular transactions.
+   - "Trade_Buy" when adding to an investment (e.g., "Buy 1000 ARCI at 350").
+   - "Trade_Sell" when selling an investment (e.g., "Sell 500 ARCI at 400").
+5. Note: Include relevant details (ticker symbol, store name, etc.).
+6. Investment Details: If it's a trade, extract the Symbol, Shares, and Price per share.
+7. Flag transactions when uncertain or data is messy.
+
+USER MESSAGE: {user_message if user_message else "(No text message, only image)"}
+
+Respond ONLY with valid JSON in this exact format:
+{{
+    "amount": 400000,
+    "category": "Investment",
+    "subcategory": "Stocks",
+    "account": "RDN Wallet - Jago",
+    "note": "Sell 1000 ARCI",
+    "transaction_type": "Trade_Sell",
+    "investment_symbol": "ARCI",
+    "shares": 1000,
+    "price_per_share": 400,
+    "is_flagged": false,
+    "flag_reason": null,
+    "confidence": 0.95
+}}
+"""
+        return prompt
+    
+    async def process_transaction(
+        self,
+        user_message: Optional[str] = None,
+        image_data: Optional[bytes] = None,
+        image_mime_type: str = "image/jpeg",
+        categories_context: str = "",
+        accounts_context: str = "",
+        current_investments: str = "",
+        current_date: Optional[str] = None
+    ) -> TransactionData:
+        """
+        Process a transaction message and/or image.
+        
+        Args:
+            user_message: Text message from user (optional if image provided)
+            image_data: Image bytes (optional if message provided)
+            image_mime_type: MIME type of the image
+            categories_context: Formatted string of valid categories
+            accounts_context: Formatted string of valid accounts
+            current_date: Current date string (defaults to today)
+            
+        Returns:
+            TransactionData with extracted transaction details
+        """
+        if not user_message and not image_data:
+            raise ValueError("Either user_message or image_data must be provided")
+        
+        if current_date is None:
+            current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        prompt = self._build_prompt(
+            user_message=user_message,
+            categories_context=categories_context,
+            accounts_context=accounts_context,
+            current_investments=current_investments,
+            current_date=current_date
+        )
+        
+        # Build contents for new SDK
+        contents = []
+        
+        # Add text prompt
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=prompt)]
+        ))
+        
+        if image_data:
+            # Add image to the request
+            # New SDK handles it via Part.from_bytes
+            contents[0].parts.append(
+                types.Part.from_bytes(data=image_data, mime_type=image_mime_type)
+            )
+        
+        # Generate response from Gemini with retry logic for rate limits
+        max_retries = 3
+        retry_delay = 2  # Start with 2 seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Synchronous call (SDK supports async but standard client is sync)
+                # For FastAPI async context, we might want to run in threadpool if it blocks,
+                # but standard usage is fine for low volume.
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=contents
+                )
+                break  # Success, exit retry loop
+            except Exception as e:
+                error_str = str(e).lower()
+                if '429' in str(e) or 'quota' in error_str or 'rate' in error_str:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Rate limited, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        logger.error(f"Rate limit exceeded after {max_retries} attempts")
+                        raise
+                else:
+                    raise  # Re-raise non-rate-limit errors immediately
+        
+        # Parse the JSON response
+        try:
+            # Extract JSON from response text (handle potential markdown code blocks)
+            # New SDK: response.text is directly accessible
+            response_text = response.text.strip()
+            if response_text.startswith('```'):
+                # Remove markdown code block formatting
+                lines = response_text.split('\n')
+                # Check if first line is ```json
+                if lines[0].startswith('```'):
+                     lines = lines[1:]
+                # Check if last line is ```
+                if lines[-1].startswith('```'):
+                    lines = lines[:-1]
+                response_text = '\n'.join(lines)
+            
+            data = json.loads(response_text)
+            
+            return TransactionData(
+                amount=float(data.get('amount', 0)),
+                category=data.get('category', 'Miscellaneous'),
+                subcategory=data.get('subcategory', 'Other'),
+                account=data.get('account', 'Wallet'),
+                note=data.get('note', ''),
+                transaction_type=data.get('transaction_type', 'Expense'),
+                is_flagged=data.get('is_flagged', False),
+                flag_reason=data.get('flag_reason'),
+                confidence=float(data.get('confidence', 0.5)),
+                investment_symbol=data.get('investment_symbol'),
+                shares=float(data.get('shares')) if data.get('shares') is not None else None,
+                price_per_share=float(data.get('price_per_share')) if data.get('price_per_share') is not None else None
+            )
+            
+        except (json.JSONDecodeError, Exception) as e:
+            logger.error(f"AI parsing error: {e}")
+            return TransactionData(
+                amount=0,
+                category='Miscellaneous',
+                subcategory='Other',
+                account='Wallet',
+                note=f"Failed to parse extraction",
+                transaction_type='Expense',
+                is_flagged=True,
+                flag_reason=f"AI response parsing error: {str(e)}",
+                confidence=0.0
+            )
+
+
+# Singleton instance
+_processor: Optional[AIProcessor] = None
+
+
+def get_ai_processor() -> AIProcessor:
+    """Get the singleton AIProcessor instance."""
+    global _processor
+    if _processor is None:
+        _processor = AIProcessor()
+    return _processor
