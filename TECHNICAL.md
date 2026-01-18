@@ -70,6 +70,7 @@ backend/
 | Symbol | String | Stock ticker |
 | Shares | Number | Number of shares |
 | Avg Buy Price | Number | Average purchase price |
+| Currency | String | USD/IDR |
 | Total Value (USD) | Number | Value in USD (Null for IDR assets) |
 | Total Value (IDR) | Number | Value in IDR |
 | Realized P/L | Number | Realized profit/loss |
@@ -145,17 +146,33 @@ backend/
 6. **Transaction Creation**:
    - Regular (Expense/Income): Single row appended
    - Transfer: Two rows (debit source, credit destination)
-   - Trade_Buy: Asset transaction + portfolio update
+   - Trade_Buy: Transfer entries (if source_account provided) + Asset transaction + portfolio update
    - Trade_Sell: Two transactions (Return of Capital + Capital Gain) + portfolio update
 7. **Confirmation**: Send formatted message back to user
 
 ## Investment Handling
 
-### Buy Flow
-1. Create Asset-type transaction (debit from account)
-2. Update Investments sheet:
+### Buy Flow (with Transfer + Asset Double Entry)
+When purchasing stocks, the system tracks the complete money flow:
+
+1. **If source_account is provided** (e.g., "Buy BBCA using BCA"):
+   - Create Transfer OUT from source bank account (e.g., BCA)
+   - Create Transfer IN to RDN/investment account
+   - This properly tracks money leaving your bank and arriving at your brokerage
+
+2. **Create Asset-type transaction** (debit from RDN account)
+   - Records the conversion of cash to stock
+
+3. **Update Investments sheet**:
    - If symbol exists: Recalculate average price
    - If new symbol: Create new row
+
+**Example transaction flow for "Buy 100 BBCA at 9000 using BCA":**
+| Date | Account | Category | Type | Amount | Note |
+|------|---------|----------|------|--------|------|
+| 2026-01-18 | BCA | Transfer | Transfer | 900,000 | Transfer to RDN for BBCA purchase |
+| 2026-01-18 | RDN Wallet | Transfer | Transfer | 900,000 | Transfer from BCA for BBCA purchase |
+| 2026-01-18 | RDN Wallet | Investment | Asset | 900,000 | Buy BBCA (IDR) |
 
 ### Sell Flow
 1. Look up average buy price from portfolio

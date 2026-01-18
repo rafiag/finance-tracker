@@ -166,7 +166,8 @@ async def telegram_webhook(request: Request):
                 shares=transaction.get('shares'),
                 price_per_share=transaction.get('price_per_share'),
                 currency=transaction.get('currency', 'IDR'),
-                flag_reason=transaction.get('flag_reason')
+                flag_reason=transaction.get('flag_reason'),
+                source_account=transaction.get('source_account')
             )
             
             return JSONResponse({
@@ -259,9 +260,45 @@ async def process_transaction(
         # Convert to IDR for transaction log (keeps all transactions in IDR)
         amount_idr = convert_usd_to_idr(total_cost, exchange_rate) if currency == "USD" else total_cost
 
-        # Log as Asset acquisition (always in IDR)
+        # Get source account (bank account where money comes from)
+        source_account = transaction_data.source_account
+        rdn_account = transaction_data.account  # Investment/RDN account
+
+        # Default to BCA if no source account specified, and flag for review
+        if not source_account:
+            source_account = "BCA"
+            status = "Flagged"  # Flag because source account was assumed
+            logger.info(f"No source account specified for Trade_Buy, defaulting to BCA and flagging")
+
+        # Create transfer entries for money flow tracking
+        if source_account:
+            # Step 1: Transfer OUT from source bank account
+            sheets.append_transaction(
+                date=current_date,
+                account=source_account,
+                category="Transfer",
+                subcategory="Investment Transfer",
+                note=f"Transfer to {rdn_account} for {transaction_data.investment_symbol} purchase",
+                amount=amount_idr,
+                transaction_type="Transfer",
+                status=status
+            )
+            # Step 2: Transfer IN to RDN account
+            sheets.append_transaction(
+                date=current_date,
+                account=rdn_account,
+                category="Transfer",
+                subcategory="Investment Transfer",
+                note=f"Transfer from {source_account} for {transaction_data.investment_symbol} purchase",
+                amount=amount_idr,
+                transaction_type="Transfer",
+                status=status
+            )
+            logger.info(f"Created transfer entries: {source_account} -> {rdn_account} for {amount_idr} IDR")
+
+        # Step 3: Log as Asset acquisition from RDN (always in IDR)
         sheets.append_transaction(
-            date=current_date, account=transaction_data.account,
+            date=current_date, account=rdn_account,
             category=transaction_data.category, subcategory=transaction_data.subcategory,
             note=f"Buy {transaction_data.investment_symbol} ({currency})", amount=amount_idr,
             transaction_type="Asset", status=status
@@ -271,7 +308,7 @@ async def process_transaction(
             symbol=transaction_data.investment_symbol,
             shares_change=shares,
             price=price,
-            account=transaction_data.account,
+            account=rdn_account,
             purchase_date=current_date,
             currency=currency,
             exchange_rate=exchange_rate
@@ -396,15 +433,28 @@ async def process_transaction(
             status=status
         )
     
+    # Determine actual values used (may differ from AI output due to defaults)
+    actual_source_account = transaction_data.source_account
+    actual_is_flagged = transaction_data.is_flagged
+    actual_flag_reason = transaction_data.flag_reason
+
+    # For Trade_Buy, source_account may have been defaulted to BCA
+    if transaction_data.transaction_type == "Trade_Buy" and not transaction_data.source_account:
+        actual_source_account = "BCA"
+        actual_is_flagged = True
+        actual_flag_reason = "Source account not specified - defaulted to BCA"
+
     return {
         "amount": transaction_data.amount,
         "category": transaction_data.category,
         "subcategory": transaction_data.subcategory,
         "account": transaction_data.account,
         "destination_account": transaction_data.destination_account,
+        "source_account": actual_source_account,
         "note": transaction_data.note,
         "transaction_type": transaction_data.transaction_type,
-        "is_flagged": transaction_data.is_flagged,
+        "is_flagged": actual_is_flagged,
+        "flag_reason": actual_flag_reason,
         "investment_symbol": transaction_data.investment_symbol,
         "shares": transaction_data.shares,
         "price_per_share": transaction_data.price_per_share,
@@ -704,6 +754,7 @@ async def get_budget_progress(year: int = None, month: int = None):
 async def create_investment(request: Request):
     """
     Create a new investment (stock purchase) from dashboard.
+    Supports optional source_account for tracking money flow from bank to RDN.
     """
     try:
         data = await request.json()
@@ -712,7 +763,8 @@ async def create_investment(request: Request):
         symbol = data.get('symbol', '').upper()
         shares = float(data.get('shares', 0))
         price = float(data.get('price', 0))
-        account = data.get('account', '')
+        account = data.get('account', '')  # RDN/Investment account
+        source_account = data.get('source_account')  # Optional: bank account
         purchase_date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
 
         if not symbol or shares <= 0 or price <= 0:
@@ -720,7 +772,40 @@ async def create_investment(request: Request):
 
         total_cost = shares * price
 
-        # Create Asset transaction
+        # Default to BCA if no source account specified, and flag for review
+        is_flagged = False
+        if not source_account:
+            source_account = "BCA"
+            is_flagged = True
+            logger.info(f"Dashboard: No source account for {symbol} purchase, defaulting to BCA and flagging")
+
+        status = "Flagged" if is_flagged else "Normal"
+
+        # Create transfer entries for money flow tracking
+        # Transfer OUT from source bank account
+        sheets.append_transaction(
+            date=purchase_date,
+            account=source_account,
+            category='Transfer',
+            subcategory='Investment Transfer',
+            note=f"Transfer to {account} for {symbol} purchase",
+            amount=total_cost,
+            transaction_type='Transfer',
+            status=status
+        )
+        # Transfer IN to RDN account
+        sheets.append_transaction(
+            date=purchase_date,
+            account=account,
+            category='Transfer',
+            subcategory='Investment Transfer',
+            note=f"Transfer from {source_account} for {symbol} purchase",
+            amount=total_cost,
+            transaction_type='Transfer',
+            status=status
+        )
+
+        # Create Asset transaction from RDN account
         sheets.append_transaction(
             date=purchase_date,
             account=account,
@@ -729,7 +814,7 @@ async def create_investment(request: Request):
             note=f"Buy {symbol}",
             amount=total_cost,
             transaction_type='Asset',
-            status='Normal'
+            status=status
         )
 
         # Update investments sheet
@@ -741,14 +826,17 @@ async def create_investment(request: Request):
             purchase_date=purchase_date
         )
 
+        flagged_note = " (flagged - source account defaulted to BCA)" if is_flagged else ""
         return {
             "status": "success",
-            "message": f"Added {shares} shares of {symbol}",
+            "message": f"Added {shares} shares of {symbol} (funded from {source_account}){flagged_note}",
             "investment": {
                 "symbol": symbol,
                 "shares": shares,
                 "price": price,
-                "total_cost": total_cost
+                "total_cost": total_cost,
+                "source_account": source_account,
+                "is_flagged": is_flagged
             }
         }
     except HTTPException:

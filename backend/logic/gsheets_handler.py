@@ -149,6 +149,7 @@ class GoogleSheetsHandler:
                 'symbol': row.get('Symbol', ''),
                 'shares': self._safe_float(row.get('Shares')),
                 'avg_price': self._safe_float(row.get('Avg Buy Price')),
+                'currency': row.get('Currency', 'IDR'),
                 'total_value_usd': self._safe_float(row.get('Total Value (USD)')) if row.get('Total Value (USD)') else None,
                 'total_value_idr': self._safe_float(row.get('Total Value (IDR)')),
                 'realized_pl': self._safe_float(row.get('Realized P/L'))
@@ -173,7 +174,9 @@ class GoogleSheetsHandler:
 
         Update or create an investment record.
 
-        Columns: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Total Value (USD) | Total Value (IDR) | Realized P/L
+        Update or create an investment record.
+
+        Columns: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Currency | Total Value (USD) | Total Value (IDR) | Realized P/L
 
         Args:
             symbol: Stock ticker symbol
@@ -219,10 +222,11 @@ class GoogleSheetsHandler:
                      total_value_usd = ""
                      total_value_idr = total_value_native
 
-                # Update columns D through H (Shares, Avg Buy Price, Total Value (USD), Total Value (IDR), Realized P/L)
-                worksheet.update(f'D{i}:H{i}', [[
+                # Update columns D through I (Shares, Avg Buy Price, Currency, Total Value (USD), Total Value (IDR), Realized P/L)
+                worksheet.update(f'D{i}:I{i}', [[
                     new_shares,
                     new_avg,
+                    currency,
                     total_value_usd,
                     total_value_idr,
                     new_pl
@@ -231,7 +235,7 @@ class GoogleSheetsHandler:
                 break
 
         if not found and shares_change > 0:
-            # New investment: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Total Value (USD) | Total Value (IDR) | Realized P/L
+            # New investment: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Currency | Total Value (USD) | Total Value (IDR) | Realized P/L
             from datetime import datetime
             if not purchase_date:
                 purchase_date = datetime.now().strftime("%Y-%m-%d")
@@ -251,6 +255,7 @@ class GoogleSheetsHandler:
                 symbol,
                 shares_change,
                 price,
+                currency,
                 total_value_usd,
                 total_value_idr,
                 0  # Realized P/L
@@ -329,8 +334,8 @@ class GoogleSheetsHandler:
         investments = self.get_investments()
         lines = []
         for inv in investments:
-            # Infer currency from schema: if total_value_usd exists, it's USD, otherwise IDR
-            currency = 'USD' if inv['total_value_usd'] is not None else 'IDR'
+            # Use explicit currency field
+            currency = inv.get('currency', 'IDR')
             if currency == "USD":
                 price_str = f"${inv['avg_price']:,.2f}"
             else:

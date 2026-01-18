@@ -43,7 +43,8 @@ CATEGORY_LIMITS = {
 }
 
 # Stock data for dummy investments
-STOCK_SYMBOLS = ['AAPL', 'GOOGL', 'AMZN', 'MSFT', 'TSLA', 'META', 'NFLX', 'NVDA']
+USD_STOCKS = ['AAPL', 'GOOGL', 'AMZN', 'MSFT', 'TSLA', 'META', 'NFLX', 'NVDA']
+IDR_STOCKS = ['BBCA', 'BBRI', 'BMRI', 'TLKM', 'ASII', 'ICBP']
 
 # Notes templates
 EXPENSE_NOTES = [
@@ -160,12 +161,30 @@ def generate_investments(count, accounts):
         investment_accounts = accounts
     
     for _ in range(count):
-        symbol = random.choice(STOCK_SYMBOLS)
+        is_usd = random.choice([True, False])
+        
+        if is_usd:
+            symbol = random.choice(USD_STOCKS)
+            currency = 'USD'
+            exchange_rate = 16000
+            avg_buy_price = random.uniform(50, 500)
+            current_price = avg_buy_price * random.uniform(0.8, 1.5)
+        else:
+            symbol = random.choice(IDR_STOCKS)
+            currency = 'IDR'
+            exchange_rate = 1
+            avg_buy_price = random.uniform(3000, 10000)
+            current_price = avg_buy_price * random.uniform(0.9, 1.2)
+            
         shares = random.randint(1, 100)
-        avg_buy_price = random.uniform(50, 500)
-        current_price = avg_buy_price * random.uniform(0.8, 1.5)
-        total_value = shares * current_price
-        total_value_idr = shares * current_price * 16500
+        
+        total_value_native = shares * current_price
+        total_value_idr = total_value_native * exchange_rate
+        
+        # Calculate USD value for display (only for USD stocks usually, or converted)
+        # Based on schema: "Total Value (USD) | Value in USD (Null for IDR assets)"
+        total_value_usd = total_value_native if is_usd else ""
+        
         realized_pl = random.uniform(-1000, 5000) if random.random() < 0.3 else 0
         
         investment = {
@@ -174,8 +193,8 @@ def generate_investments(count, accounts):
             'Symbol': symbol,
             'Shares': shares,
             'Avg Buy Price': round(avg_buy_price, 2),
-            'Current Price': round(current_price, 2),
-            'Total Value': round(total_value, 2),
+            'Currency': currency,
+            'Total Value (USD)': round(total_value_usd, 2) if is_usd else "",
             'Total Value (IDR)': round(total_value_idr, 2),
             'Realized P/L': round(realized_pl, 2)
         }
@@ -243,18 +262,18 @@ def populate_investments(spreadsheet, accounts):
     worksheet = spreadsheet.worksheet('Investments')
     worksheet.clear()
     
-    header = ['Purchase Date', 'Account', 'Symbol', 'Shares', 'Avg Buy Price', 'Current Price', 'Total Value', 'Total Value (IDR)', 'Realized P/L']
+    header = ['Purchase Date', 'Account', 'Symbol', 'Shares', 'Avg Buy Price', 'Currency', 'Total Value (USD)', 'Total Value (IDR)', 'Realized P/L']
     rows = [header]
     for i in investments:
         rows.append([
             i['Purchase Date'], i['Account'], i['Symbol'], i['Shares'], i['Avg Buy Price'],
-            i['Current Price'], i['Total Value'], i['Realized P/L']
+            i['Currency'], i['Total Value (USD)'], i['Total Value (IDR)'], i['Realized P/L']
         ])
     
-    worksheet.update(rows, f'A1:H{len(rows)}')
+    worksheet.update(rows, f'A1:I{len(rows)}')
     
     # Format header
-    worksheet.format('A1:H1', {
+    worksheet.format('A1:I1', {
         'textFormat': {'bold': True},
         'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
     })

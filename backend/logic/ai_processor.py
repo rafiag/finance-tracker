@@ -36,6 +36,8 @@ class TransactionData:
     destination_account: Optional[str] = None
     # Currency for investments (USD or IDR)
     currency: str = "IDR"
+    # For Trade_Buy: source bank account (where money comes from before going to RDN)
+    source_account: Optional[str] = None
 
 
 class AIProcessor:
@@ -91,7 +93,12 @@ RULES:
 5. Note: Include relevant details (ticker symbol, store name, etc.).
 6. Investment Details: If it's a trade, extract the Symbol, Shares, and Price per share.
 7. Transfer Details: For transfers, "account" is the SOURCE, "destination_account" is the TARGET.
-8. Currency Detection (IMPORTANT for Trade_Buy/Trade_Sell):
+8. Trade_Buy Account Flow (IMPORTANT):
+   - "account" = the RDN/investment account where the stock will be held.
+   - "source_account" = the bank account where money comes from (e.g., "BCA", "Jago").
+   - If user says "buy BBCA using BCA", then account="RDN Wallet - Jago" (or appropriate RDN) and source_account="BCA".
+   - If source_account is not mentioned, set it to null (system will handle it).
+9. Currency Detection (IMPORTANT for Trade_Buy/Trade_Sell):
    - Detect currency from the image or message context.
    - Indonesian stocks (e.g., BBCA, ARCI, TLKM, BMRI) use "IDR".
    - US/International stocks (e.g., AAPL, GOOGL, TSM, MSFT, NVDA) use "USD".
@@ -99,7 +106,7 @@ RULES:
    - Common Indonesian brokers: Stockbit, Ajaib, IPOT, Mandiri Sekuritas, BCA Sekuritas.
    - Common US brokers: Pluang, Robinhood, Interactive Brokers, TD Ameritrade, Charles Schwab, Gotrade.
    - Default to "IDR" if unclear.
-9. Flag transactions when uncertain or data is messy.
+10. Flag transactions when uncertain or data is messy.
 
 USER MESSAGE: {user_message if user_message else "(No text message, only image)"}
 
@@ -110,11 +117,31 @@ Respond ONLY with valid JSON in this exact format:
     "subcategory": "Stocks",
     "account": "RDN Wallet - Jago",
     "destination_account": null,
+    "source_account": null,
     "note": "Sell 1000 ARCI",
     "transaction_type": "Trade_Sell",
     "investment_symbol": "ARCI",
     "shares": 1000,
     "price_per_share": 400,
+    "currency": "IDR",
+    "is_flagged": false,
+    "flag_reason": null,
+    "confidence": 0.95
+}}
+
+For Trade_Buy with source account:
+{{
+    "amount": 900000,
+    "category": "Investment",
+    "subcategory": "Stocks",
+    "account": "RDN Wallet - Jago",
+    "destination_account": null,
+    "source_account": "BCA",
+    "note": "Buy 100 BBCA",
+    "transaction_type": "Trade_Buy",
+    "investment_symbol": "BBCA",
+    "shares": 100,
+    "price_per_share": 9000,
     "currency": "IDR",
     "is_flagged": false,
     "flag_reason": null,
@@ -270,7 +297,8 @@ Respond ONLY with valid JSON in this exact format:
                 shares=shares_val,
                 price_per_share=price_val,
                 destination_account=data.get('destination_account'),
-                currency=data.get('currency', 'IDR')
+                currency=data.get('currency', 'IDR'),
+                source_account=data.get('source_account')
             )
             
         except (json.JSONDecodeError, Exception) as e:

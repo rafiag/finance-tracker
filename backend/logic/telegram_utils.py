@@ -78,9 +78,9 @@ class TelegramHandler:
         investment_symbol: Optional[str] = None,
         shares: Optional[float] = None,
         price_per_share: Optional[float] = None,
-
         currency: str = "IDR",
-        flag_reason: Optional[str] = None
+        flag_reason: Optional[str] = None,
+        source_account: Optional[str] = None
     ) -> bool:
         """
         Send a transaction confirmation message.
@@ -102,13 +102,31 @@ class TelegramHandler:
             else:
                 shares_str = f"{shares:.4f}".rstrip('0').rstrip('.')
             detail_line = f"📈 {investment_symbol}: {shares_str} @ {price_formatted}"
-            message = (
-                f"{'⚠️' if is_flagged else '✅'} <b>{type_label} saved</b>\n\n"
-                f"💰 {formatted_amount}\n"
-                f"{detail_line}\n"
-                f"📁 {category} → {subcategory}\n"
-                f"💳 {account}"
-            )
+
+            # Show money flow for stock purchases
+            if source_account:
+                flow_line = f"💸 {source_account} → {account}"
+            else:
+                flow_line = f"💳 {account}"
+
+            if is_flagged:
+                message = (
+                    f"⚠️ <b>{type_label} saved (needs review)</b>\n\n"
+                    f"💰 {formatted_amount}\n"
+                    f"{detail_line}\n"
+                    f"📁 {category} → {subcategory}\n"
+                    f"{flow_line}\n\n"
+                    f"<i>This transaction was flagged for review.</i>\n"
+                    f"<i>Reason: {flag_reason if flag_reason else 'Unspecified check required'}</i>"
+                )
+            else:
+                message = (
+                    f"✅ <b>{type_label} saved</b>\n\n"
+                    f"💰 {formatted_amount}\n"
+                    f"{detail_line}\n"
+                    f"📁 {category} → {subcategory}\n"
+                    f"{flow_line}"
+                )
         else:
             # Regular transaction
             if is_flagged:
