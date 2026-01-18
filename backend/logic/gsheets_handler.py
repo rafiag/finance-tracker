@@ -124,6 +124,19 @@ class GoogleSheetsHandler:
             if row.get('Account Name')  # Skip empty rows
         ]
 
+    def _safe_float(self, value) -> float:
+        """Safely convert string to float, handling currency symbols and empty strings."""
+        if not value:
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            # Remove currency symbols and comma separators
+            clean_val = str(value).replace('Rp', '').replace('$', '').replace(',', '').strip()
+            return float(clean_val)
+        except ValueError:
+            return 0.0
+
     def get_investments(self) -> list[dict]:
         """Fetch all current investments."""
         self.connect()
@@ -134,11 +147,11 @@ class GoogleSheetsHandler:
                 'purchase_date': row.get('Purchase Date', ''),
                 'account': row.get('Account', ''),
                 'symbol': row.get('Symbol', ''),
-                'shares': float(row.get('Shares', 0) or 0),
-                'avg_price': float(row.get('Avg Buy Price', 0) or 0),
-                'total_value_usd': float(row.get('Total Value (USD)', 0) or 0) if row.get('Total Value (USD)') else None,
-                'total_value_idr': float(row.get('Total Value (IDR)', 0) or 0),
-                'realized_pl': float(row.get('Realized P/L', 0) or 0)
+                'shares': self._safe_float(row.get('Shares')),
+                'avg_price': self._safe_float(row.get('Avg Buy Price')),
+                'total_value_usd': self._safe_float(row.get('Total Value (USD)')) if row.get('Total Value (USD)') else None,
+                'total_value_idr': self._safe_float(row.get('Total Value (IDR)')),
+                'realized_pl': self._safe_float(row.get('Realized P/L'))
             }
             for row in records
             if row.get('Symbol')
@@ -179,9 +192,8 @@ class GoogleSheetsHandler:
         found = False
         for i, row in enumerate(records, start=2):  # start=2 for 1-based index + header
             if row.get('Symbol') == symbol:
-                current_shares = float(row.get('Shares', 0) or 0)
-                current_avg = float(row.get('Avg Buy Price', 0) or 0)
-                existing_currency = row.get('Currency', 'IDR')
+                current_shares = self._safe_float(row.get('Shares', 0))
+                current_avg = self._safe_float(row.get('Avg Buy Price', 0))
                 new_shares = current_shares + shares_change
 
                 if shares_change > 0:  # Buying
@@ -192,7 +204,7 @@ class GoogleSheetsHandler:
                 else:  # Selling (avg price stays the same, realized profit tracked separately)
                     new_avg = current_avg
 
-                new_pl = float(row.get('Realized P/L', 0) or 0) + realized_pl
+                new_pl = self._safe_float(row.get('Realized P/L', 0)) + realized_pl
                 current_total_value_usd = row.get('Total Value (USD)')
                 existing_currency = "USD" if current_total_value_usd else "IDR"
 
@@ -317,12 +329,8 @@ class GoogleSheetsHandler:
         investments = self.get_investments()
         lines = []
         for inv in investments:
-            currency = inv.get('currency', 'IDR')
-            if currency == "USD":
-                price_str = f"${inv['avg_price']:,.2f}"
-            else:
-                price_str = f"Rp {inv['avg_price']:,.0f}".replace(",", ".")
-            currency = inv.get('currency', 'IDR')
+            # Infer currency from schema: if total_value_usd exists, it's USD, otherwise IDR
+            currency = 'USD' if inv['total_value_usd'] is not None else 'IDR'
             if currency == "USD":
                 price_str = f"${inv['avg_price']:,.2f}"
             else:
