@@ -123,6 +123,23 @@ Respond ONLY with valid JSON in this exact format:
 """
         return prompt
     
+    def _parse_float(self, value: Union[str, float, int, None]) -> Optional[float]:
+        """Safely parse a float value from potential strings."""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            # Handle "20k", "1.5jt" (Indonesian specific)
+            s = str(value).lower().replace(',', '').replace('$', '').replace('rp', '').strip()
+            if 'k' in s:
+                return float(s.replace('k', '')) * 1000
+            if 'jt' in s:
+                return float(s.replace('jt', '')) * 1000000
+            return float(s)
+        except ValueError:
+            return None
+
     async def process_transaction(
         self,
         user_message: Optional[str] = None,
@@ -235,8 +252,12 @@ Respond ONLY with valid JSON in this exact format:
             
             data = json.loads(response_text)
             
+            amount_val = self._parse_float(data.get('amount')) or 0.0
+            shares_val = self._parse_float(data.get('shares'))
+            price_val = self._parse_float(data.get('price_per_share'))
+            
             return TransactionData(
-                amount=float(data.get('amount', 0)),
+                amount=amount_val,
                 category=data.get('category', 'Miscellaneous'),
                 subcategory=data.get('subcategory', 'Other'),
                 account=data.get('account', 'Wallet'),
@@ -246,8 +267,8 @@ Respond ONLY with valid JSON in this exact format:
                 flag_reason=data.get('flag_reason'),
                 confidence=float(data.get('confidence', 0.5)),
                 investment_symbol=data.get('investment_symbol'),
-                shares=float(data.get('shares')) if data.get('shares') is not None else None,
-                price_per_share=float(data.get('price_per_share')) if data.get('price_per_share') is not None else None,
+                shares=shares_val,
+                price_per_share=price_val,
                 destination_account=data.get('destination_account'),
                 currency=data.get('currency', 'IDR')
             )
