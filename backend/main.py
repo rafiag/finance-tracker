@@ -229,6 +229,23 @@ async def process_transaction(
     # --- Investment Orchestration ---
     if transaction_data.transaction_type == "Trade_Buy":
         total_cost = transaction_data.amount
+
+        # Calculate shares if not provided (when user gives total amount instead of shares)
+        shares = transaction_data.shares
+        price = transaction_data.price_per_share
+
+        if shares is None and price is not None and price > 0:
+            # User provided total amount and price, calculate shares
+            shares = total_cost / price
+        elif shares is None and price is None:
+            # Neither provided - flag the transaction and use defaults
+            logger.warning(f"Trade_Buy missing shares and price, using amount as placeholder")
+            shares = 1
+            price = total_cost
+        elif price is None and shares is not None and shares > 0:
+            # User provided shares but not price
+            price = total_cost / shares
+
         # Log as Asset acquisition
         sheets.append_transaction(
             date=current_date, account=transaction_data.account,
@@ -239,8 +256,8 @@ async def process_transaction(
         # Update Portfolio
         sheets.update_investment(
             symbol=transaction_data.investment_symbol,
-            shares_change=transaction_data.shares,
-            price=transaction_data.price_per_share,
+            shares_change=shares,
+            price=price,
             account=transaction_data.account,
             purchase_date=current_date
         )
@@ -249,11 +266,30 @@ async def process_transaction(
         # Find avg price to calculate split
         portfolio = sheets.get_investments()
         inv = next((i for i in portfolio if i['symbol'] == transaction_data.investment_symbol), None)
-        
-        avg_buy_price = inv['avg_price'] if inv else transaction_data.price_per_share
-        base_cost = transaction_data.shares * avg_buy_price
-        capital_gain = transaction_data.amount - base_cost
-        
+
+        # Calculate shares/price if not provided
+        shares = transaction_data.shares
+        price = transaction_data.price_per_share
+        total_amount = transaction_data.amount
+
+        if shares is None and price is not None and price > 0:
+            shares = total_amount / price
+        elif price is None and shares is not None and shares > 0:
+            price = total_amount / shares
+        elif shares is None and price is None:
+            # Fallback: use portfolio avg price if available
+            if inv and inv.get('avg_price'):
+                price = inv['avg_price']
+                shares = total_amount / price
+            else:
+                logger.warning(f"Trade_Sell missing shares and price, using amount as placeholder")
+                shares = 1
+                price = total_amount
+
+        avg_buy_price = inv['avg_price'] if inv else price
+        base_cost = shares * avg_buy_price
+        capital_gain = total_amount - base_cost
+
         # 1. Log Return of Capital (Asset)
         sheets.append_transaction(
             date=current_date, account=transaction_data.account,
@@ -271,8 +307,8 @@ async def process_transaction(
         # Update Portfolio
         sheets.update_investment(
             symbol=transaction_data.investment_symbol,
-            shares_change=-transaction_data.shares,
-            price=transaction_data.price_per_share,
+            shares_change=-shares,
+            price=price,
             realized_pl=capital_gain
         )
     
