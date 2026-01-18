@@ -34,6 +34,8 @@ class TransactionData:
     price_per_share: Optional[float] = None
     # For transfers: destination account
     destination_account: Optional[str] = None
+    # Currency for investments (USD or IDR)
+    currency: str = "IDR"
 
 
 class AIProcessor:
@@ -60,7 +62,7 @@ class AIProcessor:
     ) -> str:
         """Build the prompt for Gemini AI."""
         
-        prompt = f"""You are a financial transaction parser for an Indonesian user. 
+        prompt = f"""You are a financial transaction parser for an Indonesian user.
 Extract transaction details from the user's message and/or image (if provided).
 
 CURRENT DATE: {current_date}
@@ -75,7 +77,7 @@ CURRENT PORTFOLIO:
 {current_investments}
 
 RULES:
-1. Amount: Parse Indonesian Rupiah formats (20k=20,000, 1.5jt=1,500,000, etc.).
+1. Amount: Parse Indonesian Rupiah formats (20k=20,000, 1.5jt=1,500,000, etc.) or USD formats ($100, 100 USD).
 2. Category/Subcategory: Use only from the provided list.
 3. Account: Extract or infer from context (e.g., "RDN" usually refers to an investment account).
 4. Transaction Type:
@@ -86,7 +88,15 @@ RULES:
 5. Note: Include relevant details (ticker symbol, store name, etc.).
 6. Investment Details: If it's a trade, extract the Symbol, Shares, and Price per share.
 7. Transfer Details: For transfers, "account" is the SOURCE, "destination_account" is the TARGET.
-8. Flag transactions when uncertain or data is messy.
+8. Currency Detection (IMPORTANT for Trade_Buy/Trade_Sell):
+   - Detect currency from the image or message context.
+   - Indonesian stocks (e.g., BBCA, ARCI, TLKM, BMRI) use "IDR".
+   - US/International stocks (e.g., AAPL, GOOGL, TSM, MSFT, NVDA) use "USD".
+   - Look for currency symbols ($, Rp), app interface language, or broker name.
+   - Common Indonesian brokers: Stockbit, Ajaib, IPOT, Mandiri Sekuritas, BCA Sekuritas.
+   - Common US brokers: Pluang, Robinhood, Interactive Brokers, TD Ameritrade, Charles Schwab, Gotrade.
+   - Default to "IDR" if unclear.
+9. Flag transactions when uncertain or data is messy.
 
 USER MESSAGE: {user_message if user_message else "(No text message, only image)"}
 
@@ -102,6 +112,7 @@ Respond ONLY with valid JSON in this exact format:
     "investment_symbol": "ARCI",
     "shares": 1000,
     "price_per_share": 400,
+    "currency": "IDR",
     "is_flagged": false,
     "flag_reason": null,
     "confidence": 0.95
@@ -234,7 +245,8 @@ Respond ONLY with valid JSON in this exact format:
                 investment_symbol=data.get('investment_symbol'),
                 shares=float(data.get('shares')) if data.get('shares') is not None else None,
                 price_per_share=float(data.get('price_per_share')) if data.get('price_per_share') is not None else None,
-                destination_account=data.get('destination_account')
+                destination_account=data.get('destination_account'),
+                currency=data.get('currency', 'IDR')
             )
             
         except (json.JSONDecodeError, Exception) as e:

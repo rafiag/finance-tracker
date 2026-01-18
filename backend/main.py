@@ -19,6 +19,7 @@ load_dotenv()
 from logic.gsheets_handler import get_sheets_handler
 from logic.ai_processor import get_ai_processor
 from logic.telegram_utils import get_telegram_handler
+from logic.exchange_rate import get_usd_to_idr_rate, convert_usd_to_idr
 
 # Configure logging
 logging.basicConfig(
@@ -163,7 +164,8 @@ async def telegram_webhook(request: Request):
                 is_flagged=transaction['is_flagged'],
                 investment_symbol=transaction.get('investment_symbol'),
                 shares=transaction.get('shares'),
-                price_per_share=transaction.get('price_per_share')
+                price_per_share=transaction.get('price_per_share'),
+                currency=transaction.get('currency', 'IDR')
             )
             
             return JSONResponse({
@@ -226,6 +228,13 @@ async def process_transaction(
     current_date = datetime.now().strftime("%Y-%m-%d")
     status = "Flagged" if transaction_data.is_flagged else "Normal"
     
+    # --- Get exchange rate for USD transactions ---
+    currency = transaction_data.currency
+    exchange_rate = 1.0
+    if currency == "USD":
+        exchange_rate = await get_usd_to_idr_rate()
+        logger.info(f"Using USD/IDR exchange rate: {exchange_rate}")
+
     # --- Investment Orchestration ---
     if transaction_data.transaction_type == "Trade_Buy":
         total_cost = transaction_data.amount
@@ -246,26 +255,34 @@ async def process_transaction(
             # User provided shares but not price
             price = total_cost / shares
 
-        # Log as Asset acquisition
+        # Convert to IDR for transaction log (keeps all transactions in IDR)
+        amount_idr = convert_usd_to_idr(total_cost, exchange_rate) if currency == "USD" else total_cost
+
+        # Log as Asset acquisition (always in IDR)
         sheets.append_transaction(
             date=current_date, account=transaction_data.account,
             category=transaction_data.category, subcategory=transaction_data.subcategory,
-            note=f"Buy {transaction_data.investment_symbol}", amount=total_cost,
+            note=f"Buy {transaction_data.investment_symbol} ({currency})", amount=amount_idr,
             transaction_type="Asset", status=status
         )
-        # Update Portfolio
+        # Update Portfolio (keeps native currency for accurate tracking)
         sheets.update_investment(
             symbol=transaction_data.investment_symbol,
             shares_change=shares,
             price=price,
             account=transaction_data.account,
-            purchase_date=current_date
+            purchase_date=current_date,
+            currency=currency,
+            exchange_rate=exchange_rate
         )
     
     elif transaction_data.transaction_type == "Trade_Sell":
         # Find avg price to calculate split
         portfolio = sheets.get_investments()
         inv = next((i for i in portfolio if i['symbol'] == transaction_data.investment_symbol), None)
+
+        # Use existing investment's currency if available
+        inv_currency = inv.get('currency', 'IDR') if inv else currency
 
         # Calculate shares/price if not provided
         shares = transaction_data.shares
@@ -290,26 +307,35 @@ async def process_transaction(
         base_cost = shares * avg_buy_price
         capital_gain = total_amount - base_cost
 
-        # 1. Log Return of Capital (Asset)
+        # Get exchange rate for this currency
+        sell_exchange_rate = exchange_rate if inv_currency == "USD" else 1.0
+
+        # Convert to IDR for transaction log
+        base_cost_idr = convert_usd_to_idr(base_cost, sell_exchange_rate) if inv_currency == "USD" else base_cost
+        capital_gain_idr = convert_usd_to_idr(capital_gain, sell_exchange_rate) if inv_currency == "USD" else capital_gain
+
+        # 1. Log Return of Capital (Asset) - in IDR
         sheets.append_transaction(
             date=current_date, account=transaction_data.account,
             category=transaction_data.category, subcategory=transaction_data.subcategory,
-            note=f"Sell {transaction_data.investment_symbol} (Return of Capital)",
-            amount=base_cost, transaction_type="Asset", status=status
+            note=f"Sell {transaction_data.investment_symbol} (Return of Capital) ({inv_currency})",
+            amount=base_cost_idr, transaction_type="Asset", status=status
         )
-        # 2. Log Capital Gain (Income)
+        # 2. Log Capital Gain (Income) - in IDR
         sheets.append_transaction(
             date=current_date, account=transaction_data.account,
             category="Income", subcategory="Capital Gains",
-            note=f"Sell {transaction_data.investment_symbol} (Gain)",
-            amount=capital_gain, transaction_type="Income", status=status
+            note=f"Sell {transaction_data.investment_symbol} (Gain) ({inv_currency})",
+            amount=capital_gain_idr, transaction_type="Income", status=status
         )
-        # Update Portfolio
+        # Update Portfolio (native currency)
         sheets.update_investment(
             symbol=transaction_data.investment_symbol,
             shares_change=-shares,
             price=price,
-            realized_pl=capital_gain
+            realized_pl=capital_gain,
+            currency=inv_currency,
+            exchange_rate=sell_exchange_rate
         )
     
     elif transaction_data.transaction_type == "Transfer":
@@ -342,13 +368,29 @@ async def process_transaction(
 
     else:
         # Regular transaction (Expense, Income)
+        
+        final_amount = transaction_data.amount
+        final_note = transaction_data.note or text
+        
+        # Convert to IDR if needed
+        if currency == "USD":
+            final_amount = convert_usd_to_idr(transaction_data.amount, exchange_rate)
+            # Add original USD amount to note for reference
+            usd_note = f" (${transaction_data.amount:,.2f})"
+            if final_note:
+                final_note += usd_note
+            else:
+                final_note = usd_note.strip()
+            
+            logger.info(f"Converted regular USD transaction: ${transaction_data.amount} -> Rp {final_amount:,.0f}")
+
         sheets.append_transaction(
             date=current_date,
             account=transaction_data.account,
             category=transaction_data.category,
             subcategory=transaction_data.subcategory,
-            note=transaction_data.note or text,
-            amount=transaction_data.amount,
+            note=final_note,
+            amount=final_amount,
             transaction_type=transaction_data.transaction_type,
             status=status
         )
@@ -364,7 +406,8 @@ async def process_transaction(
         "is_flagged": transaction_data.is_flagged,
         "investment_symbol": transaction_data.investment_symbol,
         "shares": transaction_data.shares,
-        "price_per_share": transaction_data.price_per_share
+        "price_per_share": transaction_data.price_per_share,
+        "currency": transaction_data.currency
     }
 
 

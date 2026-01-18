@@ -38,9 +38,9 @@ def verify_gsheet():
     # Expected tabs and headers (matching gsheets_handler.py tab names)
     expected_structure = {
         "Transactions": ["Date", "Account", "Category", "Subcategory", "Description", "Amount", "Type", "Status"],
-        "Investments": ["Purchase Date", "Account", "Symbol", "Shares", "Avg Buy Price", "Current Price", "Total Value", "Realized P/L"],
+        "Investments": ["Purchase Date", "Account", "Symbol", "Shares", "Avg Buy Price", "Current Price", "Total Value (USD)", "Total Value (IDR)", "Realized P/L"],
         "Categories": ["Category", "Subcategory", "Type"],
-        "Settings_Accounts": ["Account Name", "Currency", "Balance", "Type"],
+        "Accounts": ["Account Name", "Currency", "Balance", "Type"],
         "Budgets": ["Category", "Monthly Budget", "Effective From"]
     }
 

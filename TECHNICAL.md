@@ -58,7 +58,7 @@ backend/
 | Category | String | Main category |
 | Subcategory | String | Subcategory |
 | Description | String | Transaction note |
-| Amount | Number | Amount in IDR |
+| Amount | Number | Amount in IDR (Global Standard) |
 | Type | String | Expense/Income/Transfer/Asset |
 | Status | String | Normal/Flagged |
 
@@ -73,6 +73,8 @@ backend/
 | Current Price | Number | Current market price |
 | Total Value | Number | Shares × Current Price |
 | Realized P/L | Number | Realized profit/loss |
+| Total Value (USD) | Number | Value in USD (Null for IDR assets) |
+| Total Value (IDR) | Number | Value in IDR |
 
 ### Categories Tab
 | Column | Type | Description |

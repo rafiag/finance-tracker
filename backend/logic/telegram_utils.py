@@ -77,18 +77,29 @@ class TelegramHandler:
         is_flagged: bool = False,
         investment_symbol: Optional[str] = None,
         shares: Optional[float] = None,
-        price_per_share: Optional[float] = None
+        price_per_share: Optional[float] = None,
+        currency: str = "IDR"
     ) -> bool:
         """
         Send a transaction confirmation message.
         """
-        # Format amount with thousand separators for Indonesian format
-        formatted_amount = f"Rp {amount:,.0f}".replace(",", ".")
-        
+        # Format amount based on currency
+        if currency == "USD":
+            formatted_amount = f"${amount:,.2f}"
+            price_formatted = f"${price_per_share:,.2f}" if price_per_share else ""
+        else:
+            formatted_amount = f"Rp {amount:,.0f}".replace(",", ".")
+            price_formatted = f"Rp {price_per_share:,.0f}".replace(",", ".") if price_per_share else ""
+
         if investment_symbol and shares and price_per_share:
             # Trade confirmation
-            type_label = "Trade" 
-            detail_line = f"📈 {investment_symbol}: {shares} @ Rp {price_per_share:,.0f}".replace(",", ".")
+            type_label = "Trade"
+            # Format shares - show decimals only if needed (for fractional shares in USD)
+            if shares == int(shares):
+                shares_str = str(int(shares))
+            else:
+                shares_str = f"{shares:.4f}".rstrip('0').rstrip('.')
+            detail_line = f"📈 {investment_symbol}: {shares_str} @ {price_formatted}"
             message = (
                 f"{'⚠️' if is_flagged else '✅'} <b>{type_label} saved</b>\n\n"
                 f"💰 {formatted_amount}\n"

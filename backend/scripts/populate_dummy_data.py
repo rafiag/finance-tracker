@@ -77,8 +77,8 @@ def fetch_master_data(spreadsheet):
     """Fetch accounts and categories from the sheets."""
     print("📋 Fetching master data from sheets...")
     
-    # Fetch Accounts (use Settings_Accounts tab name as per gsheets_handler.py)
-    accounts_sheet = spreadsheet.worksheet('Settings_Accounts')
+    # Fetch Accounts (use Accounts tab name as per gsheets_handler.py)
+    accounts_sheet = spreadsheet.worksheet('Accounts')
     accounts_data = accounts_sheet.get_all_records()
     accounts = [row['Account Name'] for row in accounts_data]
 
@@ -165,6 +165,7 @@ def generate_investments(count, accounts):
         avg_buy_price = random.uniform(50, 500)
         current_price = avg_buy_price * random.uniform(0.8, 1.5)
         total_value = shares * current_price
+        total_value_idr = shares * current_price * 16500
         realized_pl = random.uniform(-1000, 5000) if random.random() < 0.3 else 0
         
         investment = {
@@ -175,6 +176,7 @@ def generate_investments(count, accounts):
             'Avg Buy Price': round(avg_buy_price, 2),
             'Current Price': round(current_price, 2),
             'Total Value': round(total_value, 2),
+            'Total Value (IDR)': round(total_value_idr, 2),
             'Realized P/L': round(realized_pl, 2)
         }
         investments.append(investment)
@@ -241,7 +243,7 @@ def populate_investments(spreadsheet, accounts):
     worksheet = spreadsheet.worksheet('Investments')
     worksheet.clear()
     
-    header = ['Purchase Date', 'Account', 'Symbol', 'Shares', 'Avg Buy Price', 'Current Price', 'Total Value', 'Realized P/L']
+    header = ['Purchase Date', 'Account', 'Symbol', 'Shares', 'Avg Buy Price', 'Current Price', 'Total Value', 'Total Value (IDR)', 'Realized P/L']
     rows = [header]
     for i in investments:
         rows.append([
