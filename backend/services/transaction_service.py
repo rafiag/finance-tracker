@@ -152,10 +152,14 @@ async def process_transaction(
             logger.info(f"Created transfer entries: {source_account} -> {rdn_account} for {amount_idr} IDR")
 
         # Step 3: Log as Asset acquisition from RDN (always in IDR)
+        asset_note = f"Buy {transaction_data.investment_symbol} ({currency})"
+        if currency == Currency.USD.value:
+            asset_note += f" @ Rate {exchange_rate:,.0f}"
+
         sheets.append_transaction(
             date=current_date, account=rdn_account,
             category=transaction_data.category, subcategory=transaction_data.subcategory,
-            note=f"Buy {transaction_data.investment_symbol} ({currency})", amount=amount_idr,
+            note=asset_note, amount=amount_idr,
             transaction_type=TransactionType.ASSET.value, status=status
         )
         # Update Portfolio (keeps native currency for accurate tracking)
@@ -208,17 +212,25 @@ async def process_transaction(
         capital_gain_idr = convert_usd_to_idr(capital_gain, sell_exchange_rate) if inv_currency == Currency.USD.value else capital_gain
 
         # 1. Log Return of Capital (Asset) - in IDR
+        roc_note = f"Sell {transaction_data.investment_symbol} (Return of Capital) ({inv_currency})"
+        if inv_currency == Currency.USD.value:
+            roc_note += f" @ Rate {sell_exchange_rate:,.0f}"
+
         sheets.append_transaction(
             date=current_date, account=transaction_data.account,
             category=transaction_data.category, subcategory=transaction_data.subcategory,
-            note=f"Sell {transaction_data.investment_symbol} (Return of Capital) ({inv_currency})",
+            note=roc_note,
             amount=base_cost_idr, transaction_type=TransactionType.ASSET.value, status=status
         )
         # 2. Log Capital Gain (Income) - in IDR
+        gain_note = f"Sell {transaction_data.investment_symbol} (Gain) ({inv_currency})"
+        if inv_currency == Currency.USD.value:
+            gain_note += f" @ Rate {sell_exchange_rate:,.0f}"
+
         sheets.append_transaction(
             date=current_date, account=transaction_data.account,
             category="Income", subcategory="Capital Gains",
-            note=f"Sell {transaction_data.investment_symbol} (Gain) ({inv_currency})",
+            note=gain_note,
             amount=capital_gain_idr, transaction_type=TransactionType.INCOME.value, status=status
         )
         # Update Portfolio (native currency)

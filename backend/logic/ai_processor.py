@@ -54,9 +54,9 @@ class AIProcessor:
         # Initialize the new Google GenAI Client
         self.client = genai.Client(api_key=api_key)
         self.models = [
-            'gemini-3-flash',          # Main
-            'gemini-2.5-flash',        # 1st Fallback
-            'gemini-2.5-flash-lite'    # 2nd Fallback
+            'gemini-2.5-flash',     # Main
+            'gemini-3-flash',       # 1st Fallback
+            'gemini-2.5-flash-lite' # 2nd Fallback
         ]
     
     def _build_prompt(

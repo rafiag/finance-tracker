@@ -201,7 +201,7 @@ class GoogleSheetsHandler:
 
         found = False
         for i, row in enumerate(records, start=2):  # start=2 for 1-based index + header
-            if row.get('Symbol') == symbol:
+            if str(row.get('Symbol', '')).upper() == symbol.upper():
                 current_shares = self._safe_float(row.get('Shares', 0))
                 current_avg = self._safe_float(row.get('Avg Buy Price', 0))
                 new_shares = current_shares + shares_change
@@ -218,9 +218,8 @@ class GoogleSheetsHandler:
                 current_total_value_usd = row.get('Total Value (USD)')
                 existing_currency = Currency.USD.value if current_total_value_usd else Currency.IDR.value
 
-                # Calculate IDR value and USD value
-                # If existing is USD, price is in USD. If IDR, price is in IDR.
-                total_value_native = new_shares * price
+                # Cost Basis Logic: Total Value = Total Shares * Average Buy Price
+                total_value_native = new_shares * new_avg
                 
                 if existing_currency == Currency.USD.value:
                      total_value_usd = total_value_native
