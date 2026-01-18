@@ -78,7 +78,9 @@ class TelegramHandler:
         investment_symbol: Optional[str] = None,
         shares: Optional[float] = None,
         price_per_share: Optional[float] = None,
-        currency: str = "IDR"
+
+        currency: str = "IDR",
+        flag_reason: Optional[str] = None
     ) -> bool:
         """
         Send a transaction confirmation message.
@@ -115,8 +117,8 @@ class TelegramHandler:
                     f"💰 {formatted_amount}\n"
                     f"📁 {category} → {subcategory}\n"
                     f"💳 {account}\n\n"
-                    f"<i>This transaction was flagged for review. "
-                    f"Please check it in the dashboard.</i>"
+                    f"<i>This transaction was flagged for review.</i>\n"
+                    f"<i>Reason: {flag_reason if flag_reason else 'Unspecified check required'}</i>"
                 )
             else:
                 message = (

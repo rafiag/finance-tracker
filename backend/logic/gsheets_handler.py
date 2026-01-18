@@ -136,13 +136,9 @@ class GoogleSheetsHandler:
                 'symbol': row.get('Symbol', ''),
                 'shares': float(row.get('Shares', 0) or 0),
                 'avg_price': float(row.get('Avg Buy Price', 0) or 0),
-                'current_price': float(row.get('Current Price', 0) or 0),
-                'total_value': float(row.get('Total Value', 0) or 0),
-                'realized_pl': float(row.get('Realized P/L', 0) or 0),
-                'currency': row.get('Currency', 'IDR'),
-                'currency': row.get('Currency', 'IDR'),
+                'total_value_usd': float(row.get('Total Value (USD)', 0) or 0) if row.get('Total Value (USD)') else None,
                 'total_value_idr': float(row.get('Total Value (IDR)', 0) or 0),
-                'total_value_usd': float(row.get('Total Value (USD)', 0) or 0) if row.get('Total Value (USD)') else None
+                'realized_pl': float(row.get('Realized P/L', 0) or 0)
             }
             for row in records
             if row.get('Symbol')
@@ -162,7 +158,9 @@ class GoogleSheetsHandler:
         """
         Update or create an investment record.
 
-        Columns: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Current Price | Total Value | Realized P/L | Currency | Total Value (IDR) | Total Value (USD)
+        Update or create an investment record.
+
+        Columns: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Total Value (USD) | Total Value (IDR) | Realized P/L
 
         Args:
             symbol: Stock ticker symbol
@@ -195,39 +193,45 @@ class GoogleSheetsHandler:
                     new_avg = current_avg
 
                 new_pl = float(row.get('Realized P/L', 0) or 0) + realized_pl
-                total_value = new_shares * price
+                current_total_value_usd = row.get('Total Value (USD)')
+                existing_currency = "USD" if current_total_value_usd else "IDR"
 
                 # Calculate IDR value and USD value
-                rate = exchange_rate if existing_currency == "USD" else 1.0
-                total_value_idr = total_value * rate
+                # If existing is USD, price is in USD. If IDR, price is in IDR.
+                total_value_native = new_shares * price
                 
-                # Total Value USD: Defined for USD assets, Null for IDR
-                total_value_usd = total_value if existing_currency == "USD" else ""
+                if existing_currency == "USD":
+                     total_value_usd = total_value_native
+                     total_value_idr = total_value_native * exchange_rate
+                else:
+                     total_value_usd = ""
+                     total_value_idr = total_value_native
 
-                # Update columns D through K (Shares, Avg Buy Price, Current Price, Total Value, Realized P/L, Currency, Total Value (IDR), Total Value (USD))
-                worksheet.update(f'D{i}:K{i}', [[
+                # Update columns D through H (Shares, Avg Buy Price, Total Value (USD), Total Value (IDR), Realized P/L)
+                worksheet.update(f'D{i}:H{i}', [[
                     new_shares,
                     new_avg,
-                    price,
-                    total_value,
-                    new_pl,
-                    existing_currency,
+                    total_value_usd,
                     total_value_idr,
-                    total_value_usd
+                    new_pl
                 ]])
                 found = True
                 break
 
         if not found and shares_change > 0:
-            # New investment: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Current Price | Total Value | Realized P/L | Currency | Total Value IDR
+            # New investment: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Total Value (USD) | Total Value (IDR) | Realized P/L
             from datetime import datetime
             if not purchase_date:
                 purchase_date = datetime.now().strftime("%Y-%m-%d")
 
-            total_value = shares_change * price
-            rate = exchange_rate if currency == "USD" else 1.0
-            total_value_idr = total_value * rate
-            total_value_usd = total_value if currency == "USD" else ""
+            total_value_native = shares_change * price
+            
+            if currency == "USD":
+                total_value_usd = total_value_native
+                total_value_idr = total_value_native * exchange_rate
+            else:
+                total_value_usd = ""
+                total_value_idr = total_value_native
 
             worksheet.append_row([
                 purchase_date,
@@ -235,12 +239,9 @@ class GoogleSheetsHandler:
                 symbol,
                 shares_change,
                 price,
-                price,
-                total_value,
-                0,
-                currency,
+                total_value_usd,
                 total_value_idr,
-                total_value_usd
+                0  # Realized P/L
             ], value_input_option='USER_ENTERED')
 
     def append_transaction(

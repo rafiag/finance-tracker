@@ -40,7 +40,7 @@ An automated system to track personal expenses and income via Telegram, featurin
 Create Spreadsheet with:
 - **`Transactions`**: `Date | Account | Category | Subcategory | Description | Amount | Type (Inc/Exp/Transfer/Asset) | Status (normal/flagged)`.
   - *Note: For transfers, the Description field notes the counter account (e.g., "Transfer to RDN"). Two rows are created: one debit from source account, one credit to destination account.*
-- **`Investments`**: `Purchase Date | Account | Symbol | Shares | Avg Buy Price | Current Price | Total Value (USD) | Total Value (IDR) | Realized P/L`.
+- **`Investments`**: `Purchase Date | Account | Symbol | Shares | Avg Buy Price | Total Value (USD) | Total Value (IDR) | Realized P/L`.
 - **`Categories`**: `Category | Subcategory | Type (Income/Expense/Transfer/Investment)`.
 - **`Accounts`**: `Account Name | Currency | Balance | Type (Bank/Cash/Investment/RDN)`.
 - **`Budgets`**: `Category | Monthly Budget | Effective From` (Category level only).

@@ -165,7 +165,8 @@ async def telegram_webhook(request: Request):
                 investment_symbol=transaction.get('investment_symbol'),
                 shares=transaction.get('shares'),
                 price_per_share=transaction.get('price_per_share'),
-                currency=transaction.get('currency', 'IDR')
+                currency=transaction.get('currency', 'IDR'),
+                flag_reason=transaction.get('flag_reason')
             )
             
             return JSONResponse({

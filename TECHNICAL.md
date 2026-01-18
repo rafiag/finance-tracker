@@ -70,11 +70,9 @@ backend/
 | Symbol | String | Stock ticker |
 | Shares | Number | Number of shares |
 | Avg Buy Price | Number | Average purchase price |
-| Current Price | Number | Current market price |
-| Total Value | Number | Shares × Current Price |
-| Realized P/L | Number | Realized profit/loss |
 | Total Value (USD) | Number | Value in USD (Null for IDR assets) |
 | Total Value (IDR) | Number | Value in IDR |
+| Realized P/L | Number | Realized profit/loss |
 
 ### Categories Tab
 | Column | Type | Description |

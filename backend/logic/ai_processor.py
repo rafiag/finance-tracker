@@ -49,8 +49,11 @@ class AIProcessor:
         
         # Initialize the new Google GenAI Client
         self.client = genai.Client(api_key=api_key)
-        self.primary_model = 'gemini-3-flash'
-        self.fallback_model = 'gemini-2.5-flash'
+        self.models = [
+            'gemini-3-flash',          # Main
+            'gemini-2.5-flash',        # 1st Fallback
+            'gemini-2.5-flash-lite'    # 2nd Fallback
+        ]
     
     def _build_prompt(
         self,
@@ -175,7 +178,7 @@ Respond ONLY with valid JSON in this exact format:
             )
         
         # Generate response from Gemini with fallback model support
-        models_to_try = [self.primary_model, self.fallback_model]
+        models_to_try = self.models
         response = None
         last_error = None
 
