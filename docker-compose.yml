@@ -9,7 +9,10 @@ services:
     env_file:
       - ./backend/.env
     volumes:
-      - ./backend/credentials.json:/app/credentials.json
+      - ./backend:/app
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     restart: always
 
 # Future: Add database service here if needed (e.g., PostgreSQL for Next.js dashboard)

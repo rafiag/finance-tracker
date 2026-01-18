@@ -32,6 +32,8 @@ class TransactionData:
     investment_symbol: Optional[str] = None
     shares: Optional[float] = None
     price_per_share: Optional[float] = None
+    # For transfers: destination account
+    destination_account: Optional[str] = None
 
 
 class AIProcessor:
@@ -73,15 +75,17 @@ CURRENT PORTFOLIO:
 
 RULES:
 1. Amount: Parse Indonesian Rupiah formats (20k=20,000, 1.5jt=1,500,000, etc.).
-2. Category/Subcategory: Use only from the provided list. 
+2. Category/Subcategory: Use only from the provided list.
 3. Account: Extract or infer from context (e.g., "RDN" usually refers to an investment account).
 4. Transaction Type:
-   - "Expense", "Income", "Transfer" for regular transactions.
+   - "Expense", "Income" for regular transactions.
+   - "Transfer" for money movement between accounts (e.g., "transfer 500k from BCA to Jago").
    - "Trade_Buy" when adding to an investment (e.g., "Buy 1000 ARCI at 350").
    - "Trade_Sell" when selling an investment (e.g., "Sell 500 ARCI at 400").
 5. Note: Include relevant details (ticker symbol, store name, etc.).
 6. Investment Details: If it's a trade, extract the Symbol, Shares, and Price per share.
-7. Flag transactions when uncertain or data is messy.
+7. Transfer Details: For transfers, "account" is the SOURCE, "destination_account" is the TARGET.
+8. Flag transactions when uncertain or data is messy.
 
 USER MESSAGE: {user_message if user_message else "(No text message, only image)"}
 
@@ -91,6 +95,7 @@ Respond ONLY with valid JSON in this exact format:
     "category": "Investment",
     "subcategory": "Stocks",
     "account": "RDN Wallet - Jago",
+    "destination_account": null,
     "note": "Sell 1000 ARCI",
     "transaction_type": "Trade_Sell",
     "investment_symbol": "ARCI",
@@ -214,7 +219,8 @@ Respond ONLY with valid JSON in this exact format:
                 confidence=float(data.get('confidence', 0.5)),
                 investment_symbol=data.get('investment_symbol'),
                 shares=float(data.get('shares')) if data.get('shares') is not None else None,
-                price_per_share=float(data.get('price_per_share')) if data.get('price_per_share') is not None else None
+                price_per_share=float(data.get('price_per_share')) if data.get('price_per_share') is not None else None,
+                destination_account=data.get('destination_account')
             )
             
         except (json.JSONDecodeError, Exception) as e:

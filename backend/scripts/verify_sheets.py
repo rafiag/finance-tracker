@@ -15,12 +15,12 @@ def verify_gsheet():
     log("--- Google Sheets Verification ---")
     
     sheet_id = os.getenv("GOOGLE_SHEET_ID")
-    creds_path = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
+    creds_path = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH", "credentials.json")
     
     if not sheet_id:
         log("Error: GOOGLE_SHEET_ID not found in .env")
         return
-    if not creds_path or not os.path.exists(creds_path):
+    if not os.path.exists(creds_path):
         log(f"Error: Credentials file not found at {creds_path}")
         return
 
@@ -35,9 +35,10 @@ def verify_gsheet():
         log(f"Authentication Error: {e}")
         return
 
-    # Expected tabs and headers
+    # Expected tabs and headers (matching gsheets_handler.py tab names)
     expected_structure = {
-        "Transactions": ["Date", "Account", "Category", "Subcategory", "Description", "Amount", "Type"],
+        "Transactions": ["Date", "Account", "Category", "Subcategory", "Description", "Amount", "Type", "Status"],
+        "Investments": ["Purchase Date", "Account", "Symbol", "Shares", "Avg Buy Price", "Current Price", "Total Value", "Realized P/L"],
         "Settings_Categories": ["Category", "Subcategory", "Type"],
         "Settings_Accounts": ["Account Name", "Currency", "Balance", "Type"],
         "Budgets": ["Category", "Monthly Budget", "Effective From"]

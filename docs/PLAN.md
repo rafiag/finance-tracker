@@ -38,21 +38,27 @@ An automated system to track personal expenses and income via Telegram, featurin
 
 ### Phase 2: Database Schema (Google Sheets)
 Create Spreadsheet with:
-- **`Transactions`**: `Date | Account | Category | Subcategory | Description | Amount | Type (Inc/Exp/Transfer/Asset)`.
-- **`Investments`**: `Symbol | Shares | Avg Buy Price | Purchase Date | Current Price | Total Value | Realized P/L`.
-- **`Settings_Categories`**: `Category | Subcategory | Type (Income/Expense/Transfer/Investment)`.
-- **`Settings_Accounts`**: `Account Name | Currency | Balance | Type (Bank/Cash/Investment/RDN)`.
+- **`Transactions`**: `Date | Account | Category | Subcategory | Description | Amount | Type (Inc/Exp/Transfer/Asset) | Status (normal/flagged)`.
+  - *Note: For transfers, the Description field notes the counter account (e.g., "Transfer to RDN"). Two rows are created: one debit from source account, one credit to destination account.*
+- **`Investments`**: `Purchase Date | Account | Symbol | Shares | Avg Buy Price | Current Price | Total Value | Realized P/L`.
+- **`Categories`**: `Category | Subcategory | Type (Income/Expense/Transfer/Investment)`.
+- **`Accounts`**: `Account Name | Currency | Balance | Type (Bank/Cash/Investment/RDN)`.
 - **`Budgets`**: `Category | Monthly Budget | Effective From` (Category level only).
 
 ### Phase 3: Backend & AI Engine (FastAPI)
-- [ ] **Integration Layer:** POST /telegram for Bot Webhooks.
-- [ ] **AI Processor:** 
+- [x] **Integration Layer:** POST /telegram for Bot Webhooks.
+- [x] **AI Processor:**
     - System Prompt with dynamic Categories and Subcategories.
     - Multimodal OCR for receipts.
-    - **Investment Logic:** Handle commands like "Sell 1000 ARCI at 1500" or "Buy 500 AAPL".
-    - Calculate Capital Gains (Realized Profit) and split transactions into "Return of Capital" (Asset) and "Capital Gain" (Income).
+    - **Investment Logic:**
+      - **Buy stocks**: Add row to Investments sheet with Account, Purchase Date, Symbol, Shares, Avg Buy Price. Create Transaction with Type=Asset (debit from account).
+      - **Sell stocks**: Update existing Investments row (decrease Shares, update Realized P/L). Create TWO transactions:
+        1. Return of Capital (Asset type): Original investment amount returned to account
+        2. Capital Gain (Income type): Profit/loss from the sale
+      - Handle fractional shares and FIFO/LIFO cost basis calculations.
     - **Review Flag:** When AI confidence is low, mark transaction with `needs_review: true` for manual verification on dashboard.
 - [x] **GSheet Connector:** `gspread` for CRUD operations across all tabs.
+- [x] **Dashboard API Endpoints:** REST endpoints for frontend data fetching (transactions, investments, categories, accounts, budgets, summary).
 - [ ] **Market Data Service:** (Phase 4) Integrate a light service (e.g., `yfinance` or a simple web scraper) to update `Current Price` in the `Investments` tab for real-time P/L calculation on the dashboard.
 
 ---
@@ -80,7 +86,7 @@ Create Spreadsheet with:
     - **Net Worth Overview**: Area chart showing net worth growth over time.
     - **Balances Breakdown**: Donut chart and legend for Assets vs. Transaction accounts.
     - **Overall Balances Table**: Detailed list showing Account, Type, Current Balance, In/Out flows.
-    - **Stock Holdings Table**: Comprehensive view including Symbol, Shares, Avg. Buy Price, Purchase Date, Current Price (Market), Total Market Value, and Potential P/L (Color-coded).
+    - **Stock Holdings Table**: Comprehensive view including Account, Symbol, Shares, Avg. Buy Price, Purchase Date, Current Price (Market), Total Market Value, and Potential P/L (Color-coded).
 - [ ] **Budget & Transaction Management:**
     - **Budget Progress**: Card-based summary with category progress bars, "Safe" vs. "Over Budget" badges.
     - **Transactions Table**: Searchable, filterable list with capability to edit/delete records.

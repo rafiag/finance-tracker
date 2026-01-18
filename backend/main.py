@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -62,6 +63,19 @@ app = FastAPI(
     description="Personal finance tracker with Telegram integration",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# CORS configuration for dashboard frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        os.getenv("FRONTEND_URL", ""),
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -226,7 +240,9 @@ async def process_transaction(
         sheets.update_investment(
             symbol=transaction_data.investment_symbol,
             shares_change=transaction_data.shares,
-            price=transaction_data.price_per_share
+            price=transaction_data.price_per_share,
+            account=transaction_data.account,
+            purchase_date=current_date
         )
     
     elif transaction_data.transaction_type == "Trade_Sell":
@@ -260,8 +276,36 @@ async def process_transaction(
             realized_pl=capital_gain
         )
     
+    elif transaction_data.transaction_type == "Transfer":
+        # Transfer: create two transactions (debit from source, credit to destination)
+        destination = transaction_data.destination_account or "Unknown"
+
+        # Debit from source account (negative/outflow)
+        sheets.append_transaction(
+            date=current_date,
+            account=transaction_data.account,
+            category=transaction_data.category,
+            subcategory=transaction_data.subcategory,
+            note=f"Transfer to {destination}",
+            amount=transaction_data.amount,
+            transaction_type="Transfer",
+            status=status
+        )
+
+        # Credit to destination account (positive/inflow)
+        sheets.append_transaction(
+            date=current_date,
+            account=destination,
+            category=transaction_data.category,
+            subcategory=transaction_data.subcategory,
+            note=f"Transfer from {transaction_data.account}",
+            amount=transaction_data.amount,
+            transaction_type="Transfer",
+            status=status
+        )
+
     else:
-        # Regular transaction (Expense, Income, Transfer)
+        # Regular transaction (Expense, Income)
         sheets.append_transaction(
             date=current_date,
             account=transaction_data.account,
@@ -278,6 +322,7 @@ async def process_transaction(
         "category": transaction_data.category,
         "subcategory": transaction_data.subcategory,
         "account": transaction_data.account,
+        "destination_account": transaction_data.destination_account,
         "note": transaction_data.note,
         "transaction_type": transaction_data.transaction_type,
         "is_flagged": transaction_data.is_flagged,
@@ -307,6 +352,381 @@ async def test_transaction(request: Request):
         raise
     except Exception as e:
         logger.error(f"Test transaction error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Dashboard API Endpoints
+# =============================================================================
+
+@app.get("/api/transactions")
+async def get_transactions(year: int = None, month: int = None):
+    """
+    Get all transactions, optionally filtered by year and month.
+    """
+    try:
+        sheets = get_sheets_handler()
+        transactions = sheets.get_transactions(year=year, month=month)
+        return {"transactions": transactions, "count": len(transactions)}
+    except Exception as e:
+        logger.error(f"Error fetching transactions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/investments")
+async def get_investments():
+    """
+    Get all investment holdings.
+    """
+    try:
+        sheets = get_sheets_handler()
+        investments = sheets.get_investments()
+        return {"investments": investments, "count": len(investments)}
+    except Exception as e:
+        logger.error(f"Error fetching investments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/categories")
+async def get_categories():
+    """
+    Get all categories and subcategories.
+    """
+    try:
+        sheets = get_sheets_handler()
+        categories = sheets.get_categories()
+        return {"categories": categories, "count": len(categories)}
+    except Exception as e:
+        logger.error(f"Error fetching categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/accounts")
+async def get_accounts():
+    """
+    Get all accounts.
+    """
+    try:
+        sheets = get_sheets_handler()
+        accounts = sheets.get_accounts()
+        return {"accounts": accounts, "count": len(accounts)}
+    except Exception as e:
+        logger.error(f"Error fetching accounts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/budgets")
+async def get_budgets():
+    """
+    Get all budget records.
+    """
+    try:
+        sheets = get_sheets_handler()
+        budgets = sheets.get_budgets()
+        return {"budgets": budgets, "count": len(budgets)}
+    except Exception as e:
+        logger.error(f"Error fetching budgets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/summary")
+async def get_summary(year: int = None, month: int = None):
+    """
+    Get financial summary stats for the dashboard.
+    """
+    try:
+        sheets = get_sheets_handler()
+        transactions = sheets.get_transactions(year=year, month=month)
+
+        total_income = sum(t['amount'] for t in transactions if t['type'] == 'Income')
+        total_expense = sum(t['amount'] for t in transactions if t['type'] == 'Expense')
+        total_savings = total_income - total_expense
+
+        # Count flagged transactions needing review
+        flagged_count = sum(1 for t in transactions if t['status'].lower() == 'flagged')
+
+        # Category breakdown for expenses
+        expense_by_category = {}
+        for t in transactions:
+            if t['type'] == 'Expense':
+                cat = t['category']
+                expense_by_category[cat] = expense_by_category.get(cat, 0) + t['amount']
+
+        # Income breakdown by category
+        income_by_category = {}
+        for t in transactions:
+            if t['type'] == 'Income':
+                cat = t['category']
+                income_by_category[cat] = income_by_category.get(cat, 0) + t['amount']
+
+        return {
+            "total_income": total_income,
+            "total_expense": total_expense,
+            "total_savings": total_savings,
+            "flagged_count": flagged_count,
+            "transaction_count": len(transactions),
+            "expense_by_category": expense_by_category,
+            "income_by_category": income_by_category
+        }
+    except Exception as e:
+        logger.error(f"Error fetching summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/transactions/{row_index}")
+async def update_transaction(row_index: int, request: Request):
+    """
+    Update a transaction by row index.
+    """
+    try:
+        data = await request.json()
+        sheets = get_sheets_handler()
+        sheets.update_transaction(row_index, data)
+        return {"status": "success", "message": "Transaction updated"}
+    except Exception as e:
+        logger.error(f"Error updating transaction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/transactions/{row_index}")
+async def delete_transaction(row_index: int):
+    """
+    Delete a transaction by row index.
+    """
+    try:
+        sheets = get_sheets_handler()
+        sheets.delete_transaction(row_index)
+        return {"status": "success", "message": "Transaction deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting transaction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/transactions")
+async def create_transaction(request: Request):
+    """
+    Create a new transaction manually (from dashboard).
+    """
+    try:
+        data = await request.json()
+        sheets = get_sheets_handler()
+
+        sheets.append_transaction(
+            date=data.get('date', ''),
+            account=data.get('account', ''),
+            category=data.get('category', ''),
+            subcategory=data.get('subcategory', ''),
+            note=data.get('description', ''),
+            amount=float(data.get('amount', 0)),
+            transaction_type=data.get('type', 'Expense'),
+            status=data.get('status', 'Normal')
+        )
+        return {"status": "success", "message": "Transaction created"}
+    except Exception as e:
+        logger.error(f"Error creating transaction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/account-balances")
+async def get_account_balances():
+    """
+    Get account balances from the Settings_Accounts sheet.
+    Balance is calculated via Google Sheets formula for accuracy.
+    """
+    try:
+        sheets = get_sheets_handler()
+        accounts = sheets.get_accounts()
+
+        # Return accounts with their balances (from sheet formula)
+        balances = [
+            {
+                'name': acc['name'],
+                'type': acc['type'],
+                'currency': acc['currency'],
+                'balance': acc['balance']
+            }
+            for acc in accounts
+        ]
+
+        return {"balances": balances, "count": len(balances)}
+    except Exception as e:
+        logger.error(f"Error fetching account balances: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/daily-expenses")
+async def get_daily_expenses(year: int = None, month: int = None):
+    """
+    Get daily expense totals for the activity chart.
+    """
+    try:
+        sheets = get_sheets_handler()
+        transactions = sheets.get_transactions(year=year, month=month)
+
+        # Aggregate by date
+        daily = {}
+        for t in transactions:
+            if t['type'] == 'Expense':
+                date = t['date']
+                daily[date] = daily.get(date, 0) + t['amount']
+
+        # Convert to sorted list
+        result = [{'date': d, 'amount': a} for d, a in sorted(daily.items())]
+
+        return {"daily_expenses": result, "count": len(result)}
+    except Exception as e:
+        logger.error(f"Error fetching daily expenses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/budget-progress")
+async def get_budget_progress(year: int = None, month: int = None):
+    """
+    Get budget vs actual spending per category.
+    """
+    try:
+        sheets = get_sheets_handler()
+        budgets = sheets.get_budgets()
+        transactions = sheets.get_transactions(year=year, month=month)
+
+        # Calculate actual spending per category
+        spending = {}
+        for t in transactions:
+            if t['type'] == 'Expense':
+                cat = t['category']
+                spending[cat] = spending.get(cat, 0) + t['amount']
+
+        # Combine with budgets
+        progress = []
+        for b in budgets:
+            cat = b['category']
+            budget_amount = b['monthly_budget']
+            spent = spending.get(cat, 0)
+            remaining = budget_amount - spent
+            percentage = (spent / budget_amount * 100) if budget_amount > 0 else 0
+
+            progress.append({
+                'category': cat,
+                'budget': budget_amount,
+                'spent': spent,
+                'remaining': remaining,
+                'percentage': round(percentage, 1),
+                'status': 'over' if spent > budget_amount else 'safe'
+            })
+
+        return {"budget_progress": progress, "count": len(progress)}
+    except Exception as e:
+        logger.error(f"Error fetching budget progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/investments")
+async def create_investment(request: Request):
+    """
+    Create a new investment (stock purchase) from dashboard.
+    """
+    try:
+        data = await request.json()
+        sheets = get_sheets_handler()
+
+        symbol = data.get('symbol', '').upper()
+        shares = float(data.get('shares', 0))
+        price = float(data.get('price', 0))
+        account = data.get('account', '')
+        purchase_date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+
+        if not symbol or shares <= 0 or price <= 0:
+            raise HTTPException(status_code=400, detail="Symbol, shares, and price are required")
+
+        total_cost = shares * price
+
+        # Create Asset transaction
+        sheets.append_transaction(
+            date=purchase_date,
+            account=account,
+            category='Investment',
+            subcategory='Stocks',
+            note=f"Buy {symbol}",
+            amount=total_cost,
+            transaction_type='Asset',
+            status='Normal'
+        )
+
+        # Update investments sheet
+        sheets.update_investment(
+            symbol=symbol,
+            shares_change=shares,
+            price=price,
+            account=account,
+            purchase_date=purchase_date
+        )
+
+        return {
+            "status": "success",
+            "message": f"Added {shares} shares of {symbol}",
+            "investment": {
+                "symbol": symbol,
+                "shares": shares,
+                "price": price,
+                "total_cost": total_cost
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating investment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/transfers")
+async def create_transfer(request: Request):
+    """
+    Create a transfer between accounts from dashboard.
+    """
+    try:
+        data = await request.json()
+        sheets = get_sheets_handler()
+
+        from_account = data.get('from_account', '')
+        to_account = data.get('to_account', '')
+        amount = float(data.get('amount', 0))
+        date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+
+        if not from_account or not to_account or amount <= 0:
+            raise HTTPException(status_code=400, detail="From account, to account, and amount are required")
+
+        # Debit from source
+        sheets.append_transaction(
+            date=date,
+            account=from_account,
+            category='Transfer',
+            subcategory='Internal Transfer',
+            note=f"Transfer to {to_account}",
+            amount=amount,
+            transaction_type='Transfer',
+            status='Normal'
+        )
+
+        # Credit to destination
+        sheets.append_transaction(
+            date=date,
+            account=to_account,
+            category='Transfer',
+            subcategory='Internal Transfer',
+            note=f"Transfer from {from_account}",
+            amount=amount,
+            transaction_type='Transfer',
+            status='Normal'
+        )
+
+        return {
+            "status": "success",
+            "message": f"Transferred {amount} from {from_account} to {to_account}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating transfer: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

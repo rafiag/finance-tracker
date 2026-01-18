@@ -105,18 +105,19 @@ class GoogleSheetsHandler:
     def get_accounts(self) -> list[dict]:
         """
         Fetch all valid accounts from Settings_Accounts tab.
-        
+
         Returns:
-            List of dicts with keys: name, currency, type
+            List of dicts with keys: name, currency, balance, type
         """
         self.connect()
         worksheet = self._spreadsheet.worksheet(self.TAB_ACCOUNTS)
         records = worksheet.get_all_records()
-        
+
         return [
             {
                 'name': row.get('Account Name', ''),
                 'currency': row.get('Currency', ''),
+                'balance': float(row.get('Balance', 0) or 0),
                 'type': row.get('Type', '')
             }
             for row in records
@@ -130,56 +131,80 @@ class GoogleSheetsHandler:
         records = worksheet.get_all_records()
         return [
             {
+                'purchase_date': row.get('Purchase Date', ''),
+                'account': row.get('Account', ''),
                 'symbol': row.get('Symbol', ''),
-                'shares': float(row.get('Shares', 0)),
-                'avg_price': float(row.get('Avg Buy Price', 0)),
-                'current_price': float(row.get('Current Price', 0)),
-                'total_value': float(row.get('Total Value', 0)),
-                'realized_pl': float(row.get('Realized P/L', 0))
+                'shares': float(row.get('Shares', 0) or 0),
+                'avg_price': float(row.get('Avg Buy Price', 0) or 0),
+                'current_price': float(row.get('Current Price', 0) or 0),
+                'total_value': float(row.get('Total Value', 0) or 0),
+                'realized_pl': float(row.get('Realized P/L', 0) or 0)
             }
             for row in records
             if row.get('Symbol')
         ]
 
-    def update_investment(self, symbol: str, shares_change: float, price: float, realized_pl: float = 0) -> None:
-        """Update or create an investment record."""
+    def update_investment(
+        self,
+        symbol: str,
+        shares_change: float,
+        price: float,
+        realized_pl: float = 0,
+        account: str = "",
+        purchase_date: str = ""
+    ) -> None:
+        """
+        Update or create an investment record.
+
+        Columns: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Current Price | Total Value | Realized P/L
+        """
         self.connect()
         worksheet = self._spreadsheet.worksheet(self.TAB_INVESTMENTS)
         records = worksheet.get_all_records()
-        
+
         found = False
         for i, row in enumerate(records, start=2):  # start=2 for 1-based index + header
             if row.get('Symbol') == symbol:
-                current_shares = float(row.get('Shares', 0))
-                current_avg = float(row.get('Avg Buy Price', 0))
+                current_shares = float(row.get('Shares', 0) or 0)
+                current_avg = float(row.get('Avg Buy Price', 0) or 0)
                 new_shares = current_shares + shares_change
-                
+
                 if shares_change > 0:  # Buying
-                    new_avg = ((current_shares * current_avg) + (shares_change * price)) / new_shares
+                    if new_shares > 0:
+                        new_avg = ((current_shares * current_avg) + (shares_change * price)) / new_shares
+                    else:
+                        new_avg = price
                 else:  # Selling (avg price stays the same, realized profit tracked separately)
                     new_avg = current_avg
-                    
-                new_pl = float(row.get('Realized P/L', 0)) + realized_pl
-                
-                worksheet.update(f'B{i}:F{i}', [[
-                    new_shares, 
-                    new_avg, 
-                    price, 
-                    new_shares * price, 
+
+                new_pl = float(row.get('Realized P/L', 0) or 0) + realized_pl
+
+                # Update columns D through H (Shares, Avg Buy Price, Current Price, Total Value, Realized P/L)
+                worksheet.update(f'D{i}:H{i}', [[
+                    new_shares,
+                    new_avg,
+                    price,
+                    new_shares * price,
                     new_pl
                 ]])
                 found = True
                 break
-        
+
         if not found and shares_change > 0:
+            # New investment: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Current Price | Total Value | Realized P/L
+            from datetime import datetime
+            if not purchase_date:
+                purchase_date = datetime.now().strftime("%Y-%m-%d")
             worksheet.append_row([
-                symbol, 
-                shares_change, 
-                price, 
-                price, 
-                shares_change * price, 
+                purchase_date,
+                account,
+                symbol,
+                shares_change,
+                price,
+                price,
+                shares_change * price,
                 0
-            ])
+            ], value_input_option='USER_ENTERED')
 
     def append_transaction(
         self,
@@ -273,6 +298,100 @@ class GoogleSheetsHandler:
             if acc['name'].lower() == account.lower():
                 return True
         return False
+
+    def get_transactions(self, year: int = None, month: int = None) -> list[dict]:
+        """
+        Fetch all transactions, optionally filtered by year and month.
+
+        Returns:
+            List of transaction dicts with all fields.
+        """
+        self.connect()
+        worksheet = self._spreadsheet.worksheet(self.TAB_TRANSACTIONS)
+        records = worksheet.get_all_records()
+
+        transactions = []
+        for row in records:
+            date_str = row.get('Date', '')
+            if not date_str:
+                continue
+
+            # Parse date for filtering
+            try:
+                from datetime import datetime
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                if year and date_obj.year != year:
+                    continue
+                if month and date_obj.month != month:
+                    continue
+            except ValueError:
+                pass  # Keep transactions with unparseable dates
+
+            transactions.append({
+                'date': date_str,
+                'account': row.get('Account', ''),
+                'category': row.get('Category', ''),
+                'subcategory': row.get('Subcategory', ''),
+                'description': row.get('Description', ''),
+                'amount': float(row.get('Amount', 0) or 0),
+                'type': row.get('Type', ''),
+                'status': row.get('Status', 'Normal')
+            })
+
+        return transactions
+
+    def get_budgets(self) -> list[dict]:
+        """Fetch all budget records."""
+        self.connect()
+        worksheet = self._spreadsheet.worksheet(self.TAB_BUDGETS)
+        records = worksheet.get_all_records()
+
+        return [
+            {
+                'category': row.get('Category', ''),
+                'monthly_budget': float(row.get('Monthly Budget', 0) or 0),
+                'effective_from': row.get('Effective From', '')
+            }
+            for row in records
+            if row.get('Category')
+        ]
+
+    def update_transaction(self, row_index: int, data: dict) -> bool:
+        """
+        Update a transaction at a specific row.
+
+        Args:
+            row_index: 1-based row index (including header, so row 2 is first data row)
+            data: Dict with transaction fields to update
+        """
+        self.connect()
+        worksheet = self._spreadsheet.worksheet(self.TAB_TRANSACTIONS)
+
+        row = [
+            data.get('date', ''),
+            data.get('account', ''),
+            data.get('category', ''),
+            data.get('subcategory', ''),
+            data.get('description', ''),
+            data.get('amount', 0),
+            data.get('type', ''),
+            data.get('status', 'Normal')
+        ]
+
+        worksheet.update(f'A{row_index}:H{row_index}', [row], value_input_option='USER_ENTERED')
+        return True
+
+    def delete_transaction(self, row_index: int) -> bool:
+        """
+        Delete a transaction at a specific row.
+
+        Args:
+            row_index: 1-based row index
+        """
+        self.connect()
+        worksheet = self._spreadsheet.worksheet(self.TAB_TRANSACTIONS)
+        worksheet.delete_rows(row_index)
+        return True
 
 
 # Singleton instance for reuse
