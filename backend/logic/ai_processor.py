@@ -47,7 +47,8 @@ class AIProcessor:
         
         # Initialize the new Google GenAI Client
         self.client = genai.Client(api_key=api_key)
-        self.model_name = 'gemini-2.0-flash'
+        self.primary_model = 'gemini-3-flash'
+        self.fallback_model = 'gemini-2.5-flash'
     
     def _build_prompt(
         self,
@@ -162,32 +163,45 @@ Respond ONLY with valid JSON in this exact format:
                 types.Part.from_bytes(data=image_data, mime_type=image_mime_type)
             )
         
-        # Generate response from Gemini with retry logic for rate limits
-        max_retries = 3
-        retry_delay = 2  # Start with 2 seconds
-        
-        for attempt in range(max_retries):
-            try:
-                # Synchronous call (SDK supports async but standard client is sync)
-                # For FastAPI async context, we might want to run in threadpool if it blocks,
-                # but standard usage is fine for low volume.
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=contents
-                )
-                break  # Success, exit retry loop
-            except Exception as e:
-                error_str = str(e).lower()
-                if '429' in str(e) or 'quota' in error_str or 'rate' in error_str:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"Rate limited, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})")
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
+        # Generate response from Gemini with fallback model support
+        models_to_try = [self.primary_model, self.fallback_model]
+        response = None
+        last_error = None
+
+        for model_name in models_to_try:
+            max_retries = 2
+            retry_delay = 2  # Start with 2 seconds
+
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"Trying model: {model_name} (attempt {attempt + 1}/{max_retries})")
+                    response = self.client.models.generate_content(
+                        model=model_name,
+                        contents=contents
+                    )
+                    logger.info(f"Successfully generated response with {model_name}")
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    last_error = e
+                    error_str = str(e).lower()
+                    if '429' in str(e) or 'quota' in error_str or 'rate' in error_str or 'resource_exhausted' in error_str:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Rate limited on {model_name}, retrying in {retry_delay}s")
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            logger.warning(f"Rate limit exceeded on {model_name}, trying fallback model")
+                            break  # Exit retry loop, try next model
                     else:
-                        logger.error(f"Rate limit exceeded after {max_retries} attempts")
-                        raise
-                else:
-                    raise  # Re-raise non-rate-limit errors immediately
+                        logger.error(f"Non-rate-limit error on {model_name}: {e}")
+                        break  # Exit retry loop, try next model
+
+            if response is not None:
+                break  # Successfully got a response, exit model loop
+
+        if response is None:
+            logger.error(f"All models failed. Last error: {last_error}")
+            raise last_error or Exception("Failed to generate response from any model")
         
         # Parse the JSON response
         try:
