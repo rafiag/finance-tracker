@@ -33,19 +33,24 @@ This document contains technical details for developers working on the Finance T
 
 ```
 backend/
-├── main.py                    # FastAPI application & endpoints
-├── requirements.txt           # Python dependencies
-├── Dockerfile                 # Container configuration
-├── .env                       # Environment variables (not committed)
-├── credentials.json           # Google service account (not committed)
 ├── logic/
 │   ├── __init__.py
 │   ├── gsheets_handler.py     # Google Sheets CRUD operations
 │   ├── ai_processor.py        # Gemini AI integration
 │   └── telegram_utils.py      # Telegram Bot API helpers
-└── scripts/
-    ├── populate_dummy_data.py # Generate test data
-    └── verify_sheets.py       # Verify sheet structure
+├── models/
+│   ├── enums.py               # Enumerations
+│   └── schemas.py             # Pydantic validation models
+├── routers/
+│   └── transactions.py    # Transaction CRUD
+├── scripts/
+│   ├── populate_dummy_data.py
+│   └── verify_sheets.py
+├── dependencies.py        # Auth & Rate limiting
+├── main.py                # FastAPI Entry point
+├── requirements.txt
+├── Dockerfile
+└── .env.example
 ```
 
 ## Google Sheets Schema
@@ -53,6 +58,7 @@ backend/
 ### Transactions Tab
 | Column | Type | Description |
 |--------|------|-------------|
+| ID | String | Unique Transaction ID |
 | Date | String | YYYY-MM-DD format |
 | Account | String | Source account name |
 | Category | String | Main category |
@@ -126,8 +132,8 @@ backend/
 - `POST /api/transactions` - Create expense/income transaction
 - `POST /api/transfers` - Create transfer between accounts
 - `POST /api/investments` - Create stock purchase
-- `PUT /api/transactions/{row_index}` - Update transaction
-- `DELETE /api/transactions/{row_index}` - Delete transaction
+- `PUT /api/transactions/{transaction_id}` - Update transaction
+- `DELETE /api/transactions/{transaction_id}` - Delete transaction
 
 ### Health Checks
 - `GET /` - Basic health check
@@ -195,6 +201,7 @@ When purchasing stocks, the system tracks the complete money flow:
 | GOOGLE_SHEET_ID | Yes | Target spreadsheet ID |
 | GOOGLE_SHEETS_CREDENTIALS_PATH | No | Path to credentials.json (default: ./credentials.json) |
 | GOOGLE_SHEETS_CREDENTIALS_JSON | No | JSON string of credentials (for Railway) |
+| DASHBOARD_API_KEY | Recommended | API key for dashboard endpoint protection. Generate a secure random key (e.g., using `openssl rand -hex 32`). If not set, API endpoints will be unprotected. |
 | FRONTEND_URL | No | Dashboard URL for CORS |
 | PORT | No | Server port (default: 8000) |
 
@@ -225,7 +232,9 @@ The AI processor uses a structured prompt that includes:
 ## Security Measures
 
 - Authorization: Only configured chat ID can trigger transactions
+- API Authentication: Dashboard endpoints protected with API key header (X-API-Key)
 - CORS: Restricted to localhost and configured frontend URL
+- Rate Limiting: 30 requests/minute for GET endpoints, 10 requests/minute for POST endpoints
 - Credentials: Not committed to repository
 - Input validation: All user input validated before processing
 
@@ -261,14 +270,13 @@ docker compose exec backend python scripts/populate_dummy_data.py
 ## Known Limitations
 
 1. **Single User**: System designed for single authorized user
-2. **Row-Based Updates**: Transaction updates use row index (no unique IDs)
-3. **No Real-Time Prices**: Investment prices require manual/scheduled updates
-4. **Rate Limits**: Gemini API has usage limits
-5. **Google Sheets Limits**: 500 requests per 100 seconds per project
+2. **No Real-Time Prices**: Investment prices require manual/scheduled updates
+3. **Rate Limits**: Gemini API has usage limits
+4. **Google Sheets Limits**: 500 requests per 100 seconds per project
 
 ## Future Enhancements
 
 - [ ] Market data service for real-time stock prices (Phase 4)
-- [ ] Dashboard authentication (Phase 5)
+- [x] Dashboard authentication (Phase 5) - API key implemented
 - [ ] Scheduled budget alerts via Telegram
-- [ ] Transaction unique IDs for reliable updates/deletes
+- [x] Transaction unique IDs for reliable updates/deletes

@@ -11,6 +11,7 @@ This script generates realistic dummy data with:
 
 import os
 import random
+import uuid
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import gspread
@@ -138,6 +139,7 @@ def generate_transactions(count, trans_type, accounts, categories_list):
             descriptions = EXPENSE_NOTES if trans_type == 'Expense' else (INCOME_NOTES if trans_type == 'Income' else TRANSFER_NOTES)
         
         transaction = {
+            'ID': str(uuid.uuid4())[:8],
             'Date': generate_random_date(),
             'Account': random.choice(accounts),
             'Category': category,
@@ -234,18 +236,19 @@ def populate_transactions(spreadsheet, accounts, master_categories):
     worksheet = spreadsheet.worksheet('Transactions')
     worksheet.clear()
     
-    header = ['Date', 'Account', 'Category', 'Subcategory', 'Description', 'Amount', 'Type', 'Status']
+    header = ['ID', 'Date', 'Account', 'Category', 'Subcategory', 'Description', 'Amount', 'Type', 'Status']
     rows = [header]
     for t in all_transactions:
         rows.append([
+            t['ID'],
             t['Date'], t['Account'], t['Category'], t['Subcategory'],
             t['Description'], t['Amount'], t['Type'], t['Status']
         ])
     
-    worksheet.update(rows, f'A1:H{len(rows)}')
+    worksheet.update(rows, f'A1:I{len(rows)}')
     
     # Format header
-    worksheet.format('A1:H1', {
+    worksheet.format('A1:I1', {
         'textFormat': {'bold': True},
         'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
     })

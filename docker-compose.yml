@@ -11,8 +11,7 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONDONTWRITEBYTECODE=1\
+      - DASHBOARD_API_KEY=${DASHBOARD_API_KEY}
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     restart: always
-
-# Future: Add database service here if needed (e.g., PostgreSQL for Next.js dashboard)

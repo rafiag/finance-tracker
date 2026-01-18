@@ -5,6 +5,8 @@ Handles all Telegram Bot API interactions
 
 import os
 from typing import Optional
+from functools import lru_cache
+from models.enums import Currency
 import httpx
 
 
@@ -78,7 +80,7 @@ class TelegramHandler:
         investment_symbol: Optional[str] = None,
         shares: Optional[float] = None,
         price_per_share: Optional[float] = None,
-        currency: str = "IDR",
+        currency: str = Currency.IDR.value,
         flag_reason: Optional[str] = None,
         source_account: Optional[str] = None
     ) -> bool:
@@ -86,7 +88,7 @@ class TelegramHandler:
         Send a transaction confirmation message.
         """
         # Format amount based on currency
-        if currency == "USD":
+        if currency == Currency.USD.value:
             formatted_amount = f"${amount:,.2f}"
             price_formatted = f"${price_per_share:,.2f}" if price_per_share else ""
         else:
@@ -231,13 +233,7 @@ class TelegramHandler:
         }
 
 
-# Singleton instance
-_handler: Optional[TelegramHandler] = None
-
-
+@lru_cache()
 def get_telegram_handler() -> TelegramHandler:
     """Get the singleton TelegramHandler instance."""
-    global _handler
-    if _handler is None:
-        _handler = TelegramHandler()
-    return _handler
+    return TelegramHandler()

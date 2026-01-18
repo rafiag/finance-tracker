@@ -5,32 +5,36 @@ Manages all interactions with the Finance Tracker Google Spreadsheet
 
 import os
 from datetime import datetime
+import uuid
 from typing import Optional
 
 import gspread
 from google.oauth2.service_account import Credentials
+from functools import lru_cache
+from models.enums import TransactionType, TransactionStatus, Currency
 
 
 class GoogleSheetsHandler:
     """Handles all Google Sheets operations for the Finance Tracker."""
-    
+
     # Define the scopes needed for Google Sheets and Drive access
     SCOPES = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]
-    
+
     # Sheet tab names
     TAB_TRANSACTIONS = 'Transactions'
     TAB_CATEGORIES = 'Categories'
     TAB_ACCOUNTS = 'Accounts'
     TAB_BUDGETS = 'Budgets'
     TAB_INVESTMENTS = 'Investments'
-    
+
     def __init__(self):
         """Initialize the Google Sheets handler with credentials."""
         self._client: Optional[gspread.Client] = None
         self._spreadsheet: Optional[gspread.Spreadsheet] = None
+        self._worksheet_cache: dict[str, gspread.Worksheet] = {}
         
     def _get_credentials(self) -> Credentials:
         """Get Google service account credentials."""
@@ -68,6 +72,13 @@ class GoogleSheetsHandler:
                 raise ValueError("GOOGLE_SHEET_ID is not configured")
             self._spreadsheet = self._client.open_by_key(sheet_id)
 
+    def _get_worksheet(self, name: str) -> gspread.Worksheet:
+        """Get worksheet with caching to reduce API calls."""
+        if name not in self._worksheet_cache:
+            self.connect()
+            self._worksheet_cache[name] = self._spreadsheet.worksheet(name)
+        return self._worksheet_cache[name]
+
     def _get_sheet_id(self) -> Optional[str]:
         """Get Google Sheet ID from secrets or environment."""
         # Priority 1: Check Streamlit secrets
@@ -84,12 +95,11 @@ class GoogleSheetsHandler:
     def get_categories(self) -> list[dict]:
         """
         Fetch all valid categories from Categories tab.
-        
+
         Returns:
             List of dicts with keys: category, subcategory, type
         """
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_CATEGORIES)
+        worksheet = self._get_worksheet(self.TAB_CATEGORIES)
         records = worksheet.get_all_records()
         
         return [
@@ -109,8 +119,7 @@ class GoogleSheetsHandler:
         Returns:
             List of dicts with keys: name, currency, balance, type
         """
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_ACCOUNTS)
+        worksheet = self._get_worksheet(self.TAB_ACCOUNTS)
         records = worksheet.get_all_records()
 
         return [
@@ -139,8 +148,7 @@ class GoogleSheetsHandler:
 
     def get_investments(self) -> list[dict]:
         """Fetch all current investments."""
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_INVESTMENTS)
+        worksheet = self._get_worksheet(self.TAB_INVESTMENTS)
         records = worksheet.get_all_records()
         return [
             {
@@ -149,7 +157,7 @@ class GoogleSheetsHandler:
                 'symbol': row.get('Symbol', ''),
                 'shares': self._safe_float(row.get('Shares')),
                 'avg_price': self._safe_float(row.get('Avg Buy Price')),
-                'currency': row.get('Currency', 'IDR'),
+                'currency': row.get('Currency', Currency.IDR.value),
                 'total_value_usd': self._safe_float(row.get('Total Value (USD)')) if row.get('Total Value (USD)') else None,
                 'total_value_idr': self._safe_float(row.get('Total Value (IDR)')),
                 'realized_pl': self._safe_float(row.get('Realized P/L'))
@@ -166,7 +174,7 @@ class GoogleSheetsHandler:
         realized_pl: float = 0,
         account: str = "",
         purchase_date: str = "",
-        currency: str = "IDR",
+        currency: str = Currency.IDR.value,
         exchange_rate: float = 1.0
     ) -> None:
         """
@@ -188,8 +196,7 @@ class GoogleSheetsHandler:
             currency: Currency of the investment (USD or IDR)
             exchange_rate: Exchange rate to IDR (1.0 for IDR, ~16000 for USD)
         """
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_INVESTMENTS)
+        worksheet = self._get_worksheet(self.TAB_INVESTMENTS)
         records = worksheet.get_all_records()
 
         found = False
@@ -209,13 +216,13 @@ class GoogleSheetsHandler:
 
                 new_pl = self._safe_float(row.get('Realized P/L', 0)) + realized_pl
                 current_total_value_usd = row.get('Total Value (USD)')
-                existing_currency = "USD" if current_total_value_usd else "IDR"
+                existing_currency = Currency.USD.value if current_total_value_usd else Currency.IDR.value
 
                 # Calculate IDR value and USD value
                 # If existing is USD, price is in USD. If IDR, price is in IDR.
                 total_value_native = new_shares * price
                 
-                if existing_currency == "USD":
+                if existing_currency == Currency.USD.value:
                      total_value_usd = total_value_native
                      total_value_idr = total_value_native * exchange_rate
                 else:
@@ -236,13 +243,12 @@ class GoogleSheetsHandler:
 
         if not found and shares_change > 0:
             # New investment: Purchase Date | Account | Symbol | Shares | Avg Buy Price | Currency | Total Value (USD) | Total Value (IDR) | Realized P/L
-            from datetime import datetime
             if not purchase_date:
                 purchase_date = datetime.now().strftime("%Y-%m-%d")
 
             total_value_native = shares_change * price
             
-            if currency == "USD":
+            if currency == Currency.USD.value:
                 total_value_usd = total_value_native
                 total_value_idr = total_value_native * exchange_rate
             else:
@@ -270,15 +276,19 @@ class GoogleSheetsHandler:
         note: str,
         amount: float,
         transaction_type: str,
-        status: str = 'Normal'
+        status: str = TransactionStatus.NORMAL.value
     ) -> bool:
         """
         Append a new transaction to the Transactions tab.
+        Returns:
+            The generated transaction ID
         """
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_TRANSACTIONS)
+        worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+        
+        transaction_id = str(uuid.uuid4())[:8]  # Short 8-char UUID
         
         row = [
+            transaction_id,
             date,
             account,
             category,
@@ -290,7 +300,7 @@ class GoogleSheetsHandler:
         ]
         
         worksheet.append_row(row, value_input_option='USER_ENTERED')
-        return True
+        return transaction_id
     
     def get_category_list_for_prompt(self) -> str:
         """
@@ -335,8 +345,8 @@ class GoogleSheetsHandler:
         lines = []
         for inv in investments:
             # Use explicit currency field
-            currency = inv.get('currency', 'IDR')
-            if currency == "USD":
+            currency = inv.get('currency', Currency.IDR.value)
+            if currency == Currency.USD.value:
                 price_str = f"${inv['avg_price']:,.2f}"
             else:
                 price_str = f"Rp {inv['avg_price']:,.0f}".replace(",", ".")
@@ -367,8 +377,7 @@ class GoogleSheetsHandler:
         Returns:
             List of transaction dicts with all fields.
         """
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_TRANSACTIONS)
+        worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
         records = worksheet.get_all_records()
 
         transactions = []
@@ -379,7 +388,6 @@ class GoogleSheetsHandler:
 
             # Parse date for filtering
             try:
-                from datetime import datetime
                 date_obj = datetime.strptime(date_str, '%Y-%m-%d')
                 if year and date_obj.year != year:
                     continue
@@ -389,6 +397,7 @@ class GoogleSheetsHandler:
                 pass  # Keep transactions with unparseable dates
 
             transactions.append({
+                'id': str(row.get('ID', '')),
                 'date': date_str,
                 'account': row.get('Account', ''),
                 'category': row.get('Category', ''),
@@ -396,15 +405,14 @@ class GoogleSheetsHandler:
                 'description': row.get('Description', ''),
                 'amount': float(row.get('Amount', 0) or 0),
                 'type': row.get('Type', ''),
-                'status': row.get('Status', 'Normal')
+                'status': row.get('Status', TransactionStatus.NORMAL.value)
             })
 
         return transactions
 
     def get_budgets(self) -> list[dict]:
         """Fetch all budget records."""
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_BUDGETS)
+        worksheet = self._get_worksheet(self.TAB_BUDGETS)
         records = worksheet.get_all_records()
 
         return [
@@ -417,18 +425,28 @@ class GoogleSheetsHandler:
             if row.get('Category')
         ]
 
-    def update_transaction(self, row_index: int, data: dict) -> bool:
+    def update_transaction_by_id(self, transaction_id: str, data: dict) -> bool:
         """
-        Update a transaction at a specific row.
-
-        Args:
-            row_index: 1-based row index (including header, so row 2 is first data row)
-            data: Dict with transaction fields to update
+        Update a transaction by its unique ID.
         """
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_TRANSACTIONS)
-
+        worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+        records = worksheet.get_all_records()
+        
+        # Find row index
+        row_index = None
+        for i, record in enumerate(records):
+            # Convert both to string to be safe
+            if str(record.get('ID')) == str(transaction_id):
+                row_index = i + 2  # +2 because 1-based index and header row
+                break
+        
+        if not row_index:
+            return False
+            
+        # Prepare update row
+        # Note: We must preserve the ID at column A
         row = [
+            transaction_id,
             data.get('date', ''),
             data.get('account', ''),
             data.get('category', ''),
@@ -436,32 +454,34 @@ class GoogleSheetsHandler:
             data.get('description', ''),
             data.get('amount', 0),
             data.get('type', ''),
-            data.get('status', 'Normal')
+            data.get('status', TransactionStatus.NORMAL.value)
         ]
 
-        worksheet.update(f'A{row_index}:H{row_index}', [row], value_input_option='USER_ENTERED')
+        worksheet.update(f'A{row_index}:I{row_index}', [row], value_input_option='USER_ENTERED')
         return True
 
-    def delete_transaction(self, row_index: int) -> bool:
+    def delete_transaction_by_id(self, transaction_id: str) -> bool:
         """
-        Delete a transaction at a specific row.
-
-        Args:
-            row_index: 1-based row index
+        Delete a transaction by its unique ID.
         """
-        self.connect()
-        worksheet = self._spreadsheet.worksheet(self.TAB_TRANSACTIONS)
+        worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+        records = worksheet.get_all_records()
+        
+        # Find row index
+        row_index = None
+        for i, record in enumerate(records):
+            if str(record.get('ID')) == str(transaction_id):
+                row_index = i + 2
+                break
+                
+        if not row_index:
+            return False
+            
         worksheet.delete_rows(row_index)
         return True
 
 
-# Singleton instance for reuse
-_handler: Optional[GoogleSheetsHandler] = None
-
-
+@lru_cache()
 def get_sheets_handler() -> GoogleSheetsHandler:
     """Get the singleton GoogleSheetsHandler instance."""
-    global _handler
-    if _handler is None:
-        _handler = GoogleSheetsHandler()
-    return _handler
+    return GoogleSheetsHandler()

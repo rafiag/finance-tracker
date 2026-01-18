@@ -38,7 +38,7 @@ An automated system to track personal expenses and income via Telegram, featurin
 
 ### Phase 2: Database Schema (Google Sheets)
 Create Spreadsheet with:
-- **`Transactions`**: `Date | Account | Category | Subcategory | Description | Amount | Type (Inc/Exp/Transfer/Asset) | Status (normal/flagged)`.
+- **`Transactions`**: `ID | Date | Account | Category | Subcategory | Description | Amount | Type (Inc/Exp/Transfer/Asset) | Status (normal/flagged)`.
   - *Note: For transfers, two rows are created:*
     - *Source account row: Subcategory = "Transfer-Out", Description = "Transfer to {destination}"*
     - *Destination account row: Subcategory = "Transfer-In", Description = "Transfer from {source}"*
@@ -125,30 +125,35 @@ Create Spreadsheet with:
 ## 5. File Structure
 ```text
 project-root/
+├── .agent/                    # Agent instructions and workflows
 ├── backend/
-│   ├── main.py                # FastAPI (Telegram Webhook + API)
 │   ├── logic/
-│   │   ├── gsheets_handler.py # GSheets CRUD
 │   │   ├── ai_processor.py    # Gemini Logic & OCR
-│   │   └── telegram_utils.py  # Telegram API Helpers
+│   │   ├── exchange_rate.py   # Currency conversion & valuation
+│   │   ├── gsheets_handler.py # Google Sheets integration
+│   │   └── telegram_utils.py  # Telegram bot utilities
+│   ├── models/
+│   │   ├── enums.py           # Enum definitions
+│   │   └── schemas.py         # Pydantic data models
+│   ├── routers/
+│   │   ├── dashboard.py       # Dashboard API endpoints
+│   │   ├── telegram.py        # Telegram webhook handler
+│   │   └── transactions.py    # Transaction CRUD
+│   ├── scripts/
+│   │   ├── populate_dummy_data.py
+│   │   └── verify_sheets.py
+│   ├── dependencies.py        # Auth & Rate limiting
+│   ├── main.py                # FastAPI Entry point
 │   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
-│   ├── app/                   # Next.js App Router pages
-│   │   ├── layout.tsx         # Root layout with sidebar
-│   │   ├── page.tsx           # Dashboard (home)
-│   │   ├── assets/
-│   │   ├── budget/
-│   │   ├── expenses/
-│   │   ├── transactions/
-│   │   └── settings/
-│   ├── components/            # Reusable UI components
-│   │   ├── ui/                # shadcn/ui components
-│   │   ├── charts/            # Recharts wrappers
-│   │   └── modals/            # Add Record modals
-│   ├── lib/                   # API client, utilities
-│   ├── tailwind.config.ts
-│   ├── package.json
-│   └── Dockerfile
-└── docker-compose.yml         # Local dev orchestration
+│   ├── Dockerfile
+│   └── .env.example
+├── docs/
+│   ├── reference/             # UI/UX design references
+│   ├── BACKEND.md             # Backend architecture details
+│   ├── BACKEND_CODE_REVIEW.md # Code quality tracking
+│   └── PLAN.md                # Project roadmap
+├── frontend/                  # [Phase 4] Next.js Dashboard (Planned)
+├── AGENTS.md                  # Collaboration guidelines
+├── docker-compose.yml         # Container orchestration
+└── README.md                  # Project overview
 ```

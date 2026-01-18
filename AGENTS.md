@@ -237,7 +237,9 @@ If performance issues arise, optimize silently. Only involve user if tradeoffs a
 
 ## Section 8: Project-Specific Reference
 
-For detailed implementation specifications, requirements, and technical architecture for the current project, refer to **docs/PLAN.md**.
+For detailed implementation specifications, requirements, and technical architecture for the current project, refer to:
+- **docs/PLAN.md**
+- **docs/BACKEND.md**
 
 Key points to remember:
 - This is a single-user Telegram finance tracking system

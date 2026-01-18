@@ -11,7 +11,9 @@ from datetime import datetime
 from typing import Optional, List, Union
 from dataclasses import dataclass
 
+from functools import lru_cache
 from google import genai
+from models.enums import TransactionType, TransactionStatus, Currency
 from google.genai import types
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ class TransactionData:
     # For transfers: destination account
     destination_account: Optional[str] = None
     # Currency for investments (USD or IDR)
-    currency: str = "IDR"
+    currency: str = Currency.IDR.value
     # For Trade_Buy: source bank account (where money comes from before going to RDN)
     source_account: Optional[str] = None
 
@@ -292,7 +294,7 @@ For Trade_Buy with source account:
                 subcategory=data.get('subcategory', 'Other'),
                 account=data.get('account', 'Wallet'),
                 note=data.get('note', ''),
-                transaction_type=data.get('transaction_type', 'Expense'),
+                transaction_type=data.get('transaction_type', TransactionType.EXPENSE.value),
                 is_flagged=data.get('is_flagged', False),
                 flag_reason=data.get('flag_reason'),
                 confidence=float(data.get('confidence', 0.5)),
@@ -300,7 +302,7 @@ For Trade_Buy with source account:
                 shares=shares_val,
                 price_per_share=price_val,
                 destination_account=data.get('destination_account'),
-                currency=data.get('currency', 'IDR'),
+                currency=data.get('currency', Currency.IDR.value),
                 source_account=data.get('source_account')
             )
             
@@ -312,20 +314,14 @@ For Trade_Buy with source account:
                 subcategory='Other',
                 account='Wallet',
                 note=f"Failed to parse extraction",
-                transaction_type='Expense',
+                transaction_type=TransactionType.EXPENSE.value,
                 is_flagged=True,
                 flag_reason=f"AI response parsing error: {str(e)}",
                 confidence=0.0
             )
 
 
-# Singleton instance
-_processor: Optional[AIProcessor] = None
-
-
+@lru_cache()
 def get_ai_processor() -> AIProcessor:
     """Get the singleton AIProcessor instance."""
-    global _processor
-    if _processor is None:
-        _processor = AIProcessor()
-    return _processor
+    return AIProcessor()
