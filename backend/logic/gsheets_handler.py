@@ -22,8 +22,8 @@ class GoogleSheetsHandler:
     
     # Sheet tab names
     TAB_TRANSACTIONS = 'Transactions'
-    TAB_CATEGORIES = 'Settings_Categories'
-    TAB_ACCOUNTS = 'Settings_Accounts'
+    TAB_CATEGORIES = 'Categories'
+    TAB_ACCOUNTS = 'Accounts'
     TAB_BUDGETS = 'Budgets'
     TAB_INVESTMENTS = 'Investments'
     
@@ -83,7 +83,7 @@ class GoogleSheetsHandler:
     
     def get_categories(self) -> list[dict]:
         """
-        Fetch all valid categories from Settings_Categories tab.
+        Fetch all valid categories from Categories tab.
         
         Returns:
             List of dicts with keys: category, subcategory, type

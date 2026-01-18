@@ -74,7 +74,7 @@ backend/
 | Total Value | Number | Shares × Current Price |
 | Realized P/L | Number | Realized profit/loss |
 
-### Settings_Categories Tab
+### Categories Tab
 | Column | Type | Description |
 |--------|------|-------------|
 | Category | String | Main category name |

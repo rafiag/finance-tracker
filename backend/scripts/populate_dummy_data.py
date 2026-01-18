@@ -82,8 +82,8 @@ def fetch_master_data(spreadsheet):
     accounts_data = accounts_sheet.get_all_records()
     accounts = [row['Account Name'] for row in accounts_data]
 
-    # Fetch Categories (use Settings_Categories tab name as per gsheets_handler.py)
-    categories_sheet = spreadsheet.worksheet('Settings_Categories')
+    # Fetch Categories (use Categories tab name as per gsheets_handler.py)
+    categories_sheet = spreadsheet.worksheet('Categories')
     categories_data = categories_sheet.get_all_records()
     
     # Group categories by type

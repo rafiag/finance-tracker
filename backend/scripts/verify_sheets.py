@@ -39,7 +39,7 @@ def verify_gsheet():
     expected_structure = {
         "Transactions": ["Date", "Account", "Category", "Subcategory", "Description", "Amount", "Type", "Status"],
         "Investments": ["Purchase Date", "Account", "Symbol", "Shares", "Avg Buy Price", "Current Price", "Total Value", "Realized P/L"],
-        "Settings_Categories": ["Category", "Subcategory", "Type"],
+        "Categories": ["Category", "Subcategory", "Type"],
         "Settings_Accounts": ["Account Name", "Currency", "Balance", "Type"],
         "Budgets": ["Category", "Monthly Budget", "Effective From"]
     }
