@@ -8,18 +8,22 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { cn, formatCurrency } from "@/lib/utils";
-import { Transaction } from "@/lib/services";
+import { cn, formatCurrency, getTransactionTypeColor } from "@/lib/utils";
+import { Transaction, deleteTransaction, updateTransaction } from "@/lib/services";
 import { Edit2, Trash2, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EditTransactionModal } from "./edit-transaction-modal";
 
 interface TransactionsTableProps {
     transactions: Transaction[];
     isLoading?: boolean;
+    onRefresh?: () => void;
 }
 
-export function TransactionsTable({ transactions, isLoading }: TransactionsTableProps) {
+export function TransactionsTable({ transactions, isLoading, onRefresh }: TransactionsTableProps) {
     const [currentPage, setCurrentPage] = useState(1);
+    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const itemsPerPage = 20;
 
     if (isLoading) {
@@ -40,6 +44,46 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
 
     const handleNext = () => {
         if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    };
+
+    const handleEdit = (transaction: Transaction) => {
+        setEditingTransaction(transaction);
+        setIsEditModalOpen(true);
+    };
+
+    const handleApprove = async (transaction: Transaction) => {
+        try {
+            await updateTransaction(transaction.id, { status: 'Normal' });
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            console.error('Error approving transaction:', error);
+            alert('Failed to approve transaction. Please try again.');
+        }
+    };
+
+    const handleDelete = async (transaction: Transaction) => {
+        const confirmed = window.confirm(
+            `Are you sure you want to delete this transaction?\n\n` +
+            `${transaction.description || 'No description'}\n` +
+            `Amount: ${formatCurrency(transaction.amount)}\n` +
+            `Date: ${new Date(transaction.date).toLocaleDateString()}`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            await deleteTransaction(transaction.id);
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            console.error('Error deleting transaction:', error);
+            alert('Failed to delete transaction. Please try again.');
+        }
+    };
+
+    const handleEditSuccess = () => {
+        if (onRefresh) onRefresh();
+        setIsEditModalOpen(false);
+        setEditingTransaction(null);
     };
 
     return (
@@ -77,8 +121,7 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
                                 </TableCell>
                                 <TableCell className={cn(
                                     "text-right font-medium",
-                                    transaction.type === 'Income' ? "text-income-600 dark:text-income-400" :
-                                        transaction.type === 'Expense' ? "text-expense-600 dark:text-expense-400" : ""
+                                    getTransactionTypeColor(transaction.type)
                                 )}>
                                     {transaction.type === 'Income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
                                 </TableCell>
@@ -92,14 +135,29 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
                                         {transaction.status === 'Flagged' && (
-                                            <Button variant="ghost" size="icon" title="Approve">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Approve"
+                                                onClick={() => handleApprove(transaction)}
+                                            >
                                                 <CheckCircle className="h-4 w-4 text-green-500" />
                                             </Button>
                                         )}
-                                        <Button variant="ghost" size="icon" title="Edit">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Edit"
+                                            onClick={() => handleEdit(transaction)}
+                                        >
                                             <Edit2 className="h-4 w-4 text-muted-foreground" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" title="Delete">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Delete"
+                                            onClick={() => handleDelete(transaction)}
+                                        >
                                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                                         </Button>
                                     </div>
@@ -135,6 +193,17 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
                     </Button>
                 </div>
             )}
+
+            {/* Edit Transaction Modal */}
+            <EditTransactionModal
+                transaction={editingTransaction}
+                isOpen={isEditModalOpen}
+                onClose={() => {
+                    setIsEditModalOpen(false);
+                    setEditingTransaction(null);
+                }}
+                onSuccess={handleEditSuccess}
+            />
         </div>
     );
 }

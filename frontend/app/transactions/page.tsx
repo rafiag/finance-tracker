@@ -26,27 +26,41 @@ export default function TransactionsPage() {
         loadAccounts();
     }, []);
 
-    useEffect(() => {
-        const loadTransactions = async () => {
-            setLoading(true);
-            try {
-                // Prepare params
-                const params: Record<string, unknown> = { ...filters };
-                if (params.account === 'all') delete params.account;
-                if (params.category === 'all') delete params.category;
-                if (params.type === 'all') delete params.type;
+    const loadTransactions = useCallback(async () => {
+        setLoading(true);
+        try {
+            const year = filters.year as number;
+            const month = filters.month as number;
 
-                const data = await fetchTransactions(params);
-                setTransactions(data);
-            } catch (error) {
-                console.error("Failed to load transactions", error);
-            } finally {
-                setLoading(false);
+            // Fetch all transactions for the selected period
+            const data = await fetchTransactions(year, month);
+
+            // Apply client-side filters
+            let filtered = data;
+
+            if (filters.account !== 'all') {
+                filtered = filtered.filter(t => t.account === filters.account);
             }
-        };
 
-        loadTransactions();
+            if (filters.category !== 'all') {
+                filtered = filtered.filter(t => t.category === filters.category);
+            }
+
+            if (filters.type !== 'all') {
+                filtered = filtered.filter(t => t.type === filters.type);
+            }
+
+            setTransactions(filtered);
+        } catch (error) {
+            console.error("Failed to load transactions", error);
+        } finally {
+            setLoading(false);
+        }
     }, [filters]);
+
+    useEffect(() => {
+        loadTransactions();
+    }, [loadTransactions]);
 
     const handleFilterChange = useCallback((newFilters: Record<string, unknown>) => {
         setFilters((prev) => {
@@ -70,7 +84,11 @@ export default function TransactionsPage() {
             />
 
             <div className="space-y-4">
-                <TransactionsTable transactions={transactions} isLoading={loading} />
+                <TransactionsTable
+                    transactions={transactions}
+                    isLoading={loading}
+                    onRefresh={loadTransactions}
+                />
             </div>
         </div>
     );
