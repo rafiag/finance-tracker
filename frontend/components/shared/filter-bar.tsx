@@ -8,24 +8,30 @@ import {
     SelectTrigger,
     SelectValue
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, Search } from "lucide-react";
+import { debounce } from "@/lib/utils";
 
 interface FilterBarProps {
-    showDateFilter?: boolean; // For simplicity, just Year/Month for now
+    showDateFilter?: boolean;
     showAccountFilter?: boolean;
     showCategoryFilter?: boolean;
     showTypeFilter?: boolean;
+    showStatusFilter?: boolean;
+    showSearch?: boolean;
     onFilterChange: (filters: any) => void;
     accounts?: { name: string }[];
-    categories?: string[];
+    categories?: { name: string; type: string }[];
 }
 
 export function FilterBar({
     showDateFilter = true,
     showAccountFilter = true,
-    showCategoryFilter = true,
+    showCategoryFilter = false,
     showTypeFilter = true,
+    showStatusFilter = false,
+    showSearch = false,
     onFilterChange,
     accounts = [],
     categories = []
@@ -36,10 +42,22 @@ export function FilterBar({
     const [account, setAccount] = useState<string>("all");
     const [category, setCategory] = useState<string>("all");
     const [type, setType] = useState<string>("all");
+    const [status, setStatus] = useState<string>("all");
+    const [search, setSearch] = useState<string>("");
 
-    // Debounce or effect to trigger change
-    useEffect(() => {
-        const filters: any = {};
+    // Debounced search handler
+    const debouncedSearch = debounce((value: string) => {
+        triggerFilterChange({ search: value });
+    }, 300);
+
+    const handleSearchChange = (value: string) => {
+        setSearch(value);
+        debouncedSearch(value);
+    };
+
+    const triggerFilterChange = (extraFilters: any = {}) => {
+        const filters: any = { ...extraFilters };
+
         if (showDateFilter) {
             filters.year = parseInt(year);
             filters.month = parseInt(month);
@@ -47,9 +65,15 @@ export function FilterBar({
         if (showAccountFilter && account !== "all") filters.account = account;
         if (showCategoryFilter && category !== "all") filters.category = category;
         if (showTypeFilter && type !== "all") filters.type = type;
+        if (showStatusFilter && status !== "all") filters.status = status;
+        if (showSearch && search) filters.search = search;
 
         onFilterChange(filters);
-    }, [year, month, account, category, type, showDateFilter, showAccountFilter, showCategoryFilter, showTypeFilter, onFilterChange]);
+    };
+
+    useEffect(() => {
+        triggerFilterChange();
+    }, [year, month, account, category, type, status]);
 
     const resetFilters = () => {
         setYear(currentYear.toString());
@@ -57,10 +81,24 @@ export function FilterBar({
         setAccount("all");
         setCategory("all");
         setType("all");
+        setStatus("all");
+        setSearch("");
+        onFilterChange({
+            year: currentYear,
+            month: new Date().getMonth() + 1,
+            account: "all",
+            category: "all",
+            type: "all",
+            status: "all",
+            search: ""
+        });
     };
 
+    // Get unique category names
+    const uniqueCategories = Array.from(new Set(categories.map(c => c.name))).sort();
+
     return (
-        <div className="flex flex-wrap items-center gap-2 mb-4 p-2 bg-card rounded-lg border">
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-card rounded-lg border">
             {showDateFilter && (
                 <>
                     <Select value={year} onValueChange={setYear}>
@@ -89,7 +127,7 @@ export function FilterBar({
                 </>
             )}
 
-            {showAccountFilter && (
+            {showAccountFilter && accounts.length > 0 && (
                 <Select value={account} onValueChange={setAccount}>
                     <SelectTrigger className="w-[150px]">
                         <SelectValue placeholder="All Accounts" />
@@ -98,6 +136,20 @@ export function FilterBar({
                         <SelectItem value="all">All Accounts</SelectItem>
                         {accounts.map((acc) => (
                             <SelectItem key={acc.name} value={acc.name}>{acc.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+
+            {showCategoryFilter && uniqueCategories.length > 0 && (
+                <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {uniqueCategories.map((cat) => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -113,9 +165,34 @@ export function FilterBar({
                         <SelectItem value="Income">Income</SelectItem>
                         <SelectItem value="Expense">Expense</SelectItem>
                         <SelectItem value="Transfer">Transfer</SelectItem>
-                        <SelectItem value="Stock">Stock</SelectItem>
+                        <SelectItem value="Asset">Asset</SelectItem>
                     </SelectContent>
                 </Select>
+            )}
+
+            {showStatusFilter && (
+                <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger className="w-[130px]">
+                        <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="Normal">Normal</SelectItem>
+                        <SelectItem value="Flagged">Flagged</SelectItem>
+                    </SelectContent>
+                </Select>
+            )}
+
+            {showSearch && (
+                <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search descriptions..."
+                        value={search}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        className="pl-8"
+                    />
+                </div>
             )}
 
             <Button variant="ghost" size="icon" onClick={resetFilters} title="Reset Filters">

@@ -3,27 +3,38 @@
 import { useEffect, useState, useCallback } from "react";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { TransactionsTable } from "@/components/transactions/transactions-table";
-import { fetchTransactions, fetchAccounts, Transaction, Account } from "@/lib/services";
+import { fetchTransactions, fetchAccounts, fetchCategories, Transaction, Account, Category } from "@/lib/services";
 
 export default function TransactionsPage() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState<Record<string, unknown>>({
         year: new Date().getFullYear(),
         month: new Date().getMonth() + 1,
         account: 'all',
         category: 'all',
-        type: 'all'
+        type: 'all',
+        status: 'all',
+        search: ''
     });
 
     useEffect(() => {
-        // Fetch accounts for filter dropdown
-        const loadAccounts = async () => {
-            const data = await fetchAccounts();
-            setAccounts(data);
+        // Fetch accounts and categories for filter dropdowns
+        const loadMasterData = async () => {
+            try {
+                const [accountsData, categoriesData] = await Promise.all([
+                    fetchAccounts(),
+                    fetchCategories()
+                ]);
+                setAccounts(accountsData);
+                setCategories(categoriesData);
+            } catch (error) {
+                console.error("Failed to load master data", error);
+            }
         };
-        loadAccounts();
+        loadMasterData();
     }, []);
 
     const loadTransactions = useCallback(async () => {
@@ -48,6 +59,19 @@ export default function TransactionsPage() {
 
             if (filters.type !== 'all') {
                 filtered = filtered.filter(t => t.type === filters.type);
+            }
+
+            if (filters.status !== 'all') {
+                filtered = filtered.filter(t => t.status === filters.status);
+            }
+
+            if (filters.search) {
+                const searchTerm = (filters.search as string).toLowerCase();
+                filtered = filtered.filter(t =>
+                    t.description?.toLowerCase().includes(searchTerm) ||
+                    t.category?.toLowerCase().includes(searchTerm) ||
+                    t.subcategory?.toLowerCase().includes(searchTerm)
+                );
             }
 
             setTransactions(filtered);
@@ -80,7 +104,10 @@ export default function TransactionsPage() {
             <FilterBar
                 onFilterChange={handleFilterChange}
                 accounts={accounts}
-                showCategoryFilter={false} // Category filter needs category list which we haven't fetched yet. simplification for now.
+                categories={categories}
+                showCategoryFilter={true}
+                showStatusFilter={true}
+                showSearch={true}
             />
 
             <div className="space-y-4">

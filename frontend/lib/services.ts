@@ -37,6 +37,7 @@ export interface Budget {
   limit: number;
   spent: number;
   percentage: number;
+  effective_from?: string;
 }
 
 export interface Investment {
@@ -222,4 +223,74 @@ export async function fetchMarketData(symbols: string[]): Promise<Record<string,
   const symbolsParam = symbols.join(',');
   const data = await fetchAPI(`/api/market-data?symbols=${symbolsParam}`);
   return data.market_data || {};
+}
+
+// Settings - Accounts API
+export async function createAccount(account: { name: string; type: string; currency: string }): Promise<void> {
+  await fetchAPI('/api/accounts', {
+    method: 'POST',
+    body: JSON.stringify(account),
+  });
+}
+
+export async function updateAccount(
+  accountName: string,
+  updates: { new_name?: string; type?: string; balance?: number }
+): Promise<{ balance_adjusted: boolean; adjustment_amount: number | null }> {
+  const data = await fetchAPI(`/api/accounts/${encodeURIComponent(accountName)}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+  return data;
+}
+
+export async function deleteAccount(accountName: string): Promise<void> {
+  await fetchAPI(`/api/accounts/${encodeURIComponent(accountName)}`, {
+    method: 'DELETE',
+  });
+}
+
+// Settings - Categories API
+export async function createCategory(category: {
+  category: string;
+  type: string;
+  subcategory?: string;
+}): Promise<void> {
+  await fetchAPI('/api/categories', {
+    method: 'POST',
+    body: JSON.stringify(category),
+  });
+}
+
+export async function updateCategory(
+  categoryName: string,
+  subcategoryName: string,
+  updates: { new_category?: string; new_subcategory?: string }
+): Promise<void> {
+  await fetchAPI(
+    `/api/categories/${encodeURIComponent(categoryName)}?subcategory_name=${encodeURIComponent(subcategoryName)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    }
+  );
+}
+
+export async function deleteCategory(categoryName: string, subcategoryName: string = ''): Promise<void> {
+  await fetchAPI(
+    `/api/categories/${encodeURIComponent(categoryName)}?subcategory_name=${encodeURIComponent(subcategoryName)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+}
+
+// Settings - Budgets API
+export async function updateBudgets(
+  budgets: Array<{ category: string; monthly_budget: number; effective_from?: string }>
+): Promise<void> {
+  await fetchAPI('/api/budgets', {
+    method: 'PUT',
+    body: JSON.stringify(budgets),
+  });
 }

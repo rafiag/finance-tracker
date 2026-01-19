@@ -21,7 +21,7 @@ from logic.ai_processor import get_ai_processor
 from logic.telegram_utils import get_telegram_handler
 from dependencies import limiter
 
-from routers import dashboard, transactions, telegram
+from routers import dashboard, transactions, telegram, settings
 
 # Load environment variables
 load_dotenv()
@@ -130,6 +130,7 @@ app.add_middleware(
 app.include_router(telegram.router)
 app.include_router(dashboard.router)
 app.include_router(transactions.router)
+app.include_router(settings.router)
 
 
 @app.get("/")
