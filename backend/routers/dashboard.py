@@ -4,6 +4,8 @@ from dependencies import verify_api_key, limiter
 from logic.gsheets_handler import get_sheets_handler
 from services.cache import cache, summary_cache
 from models.schemas import CategoriesResponse, AccountsResponse
+import yfinance as yf
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -337,4 +339,81 @@ async def get_budget_progress(
         raise
     except Exception as e:
         logger.error(f"Error fetching budget progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/market-data")
+@limiter.limit("20/minute")
+async def get_market_data(
+    request: Request,
+    symbols: str,
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Get real-time market data for stock symbols using yfinance.
+    Rate limited to 20 requests per minute to avoid API abuse.
+    Protected with API key authentication (Issue 3.3).
+
+    Args:
+        symbols: Comma-separated list of stock symbols (e.g., "AAPL,GOOGL,MSFT")
+
+    Returns:
+        Dictionary with symbol as key and market data as value
+    """
+    try:
+        if not symbols:
+            raise HTTPException(status_code=400, detail="symbols parameter is required")
+
+        # Parse symbols
+        symbol_list = [s.strip().upper() for s in symbols.split(',')]
+
+        if len(symbol_list) > 20:
+            raise HTTPException(status_code=400, detail="Maximum 20 symbols allowed per request")
+
+        # Check cache first (5 minute TTL)
+        cache_key = f"market_data_{symbols}"
+        if cached := summary_cache.get(cache_key):
+            logger.info(f"Returning cached market data for {len(symbol_list)} symbols")
+            return {"market_data": cached, "cached": True}
+
+        # Fetch market data
+        market_data = {}
+
+        for symbol in symbol_list:
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                history = ticker.history(period="1d")
+
+                if history.empty:
+                    logger.warning(f"No data available for {symbol}")
+                    continue
+
+                current_price = history['Close'].iloc[-1]
+                open_price = history['Open'].iloc[-1]
+                change_percent = ((current_price - open_price) / open_price * 100) if open_price > 0 else 0
+
+                market_data[symbol] = {
+                    "symbol": symbol,
+                    "current_price": round(float(current_price), 2),
+                    "change_percent": round(float(change_percent), 2),
+                    "currency": info.get("currency", "USD")
+                }
+
+                logger.info(f"Fetched market data for {symbol}: ${current_price:.2f}")
+
+            except Exception as e:
+                logger.error(f"Error fetching data for {symbol}: {e}")
+                # Continue with other symbols even if one fails
+                continue
+
+        # Cache the result for 5 minutes
+        summary_cache.set(cache_key, market_data, ttl=300)
+
+        return {"market_data": market_data, "cached": False, "count": len(market_data)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching market data: {e}")
         raise HTTPException(status_code=500, detail=str(e))

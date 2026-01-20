@@ -8,22 +8,40 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { cn, formatCurrency } from "@/lib/utils";
-import { Transaction } from "@/lib/services";
+import { cn, formatCurrency, getTransactionTypeColor } from "@/lib/utils";
+import { Transaction, deleteTransaction, updateTransaction } from "@/lib/services";
 import { Edit2, Trash2, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EditTransactionModal } from "./edit-transaction-modal";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { TransactionsTableSkeleton } from "@/components/skeletons/transactions-skeleton";
 
 interface TransactionsTableProps {
     transactions: Transaction[];
     isLoading?: boolean;
+    onRefresh?: () => void;
 }
 
-export function TransactionsTable({ transactions, isLoading }: TransactionsTableProps) {
+export function TransactionsTable({ transactions, isLoading, onRefresh }: TransactionsTableProps) {
     const [currentPage, setCurrentPage] = useState(1);
+    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
     const itemsPerPage = 20;
 
     if (isLoading) {
-        return <div className="p-4 text-center">Loading transactions...</div>;
+        return <TransactionsTableSkeleton />;
     }
 
     if (transactions.length === 0) {
@@ -40,6 +58,49 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
 
     const handleNext = () => {
         if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    };
+
+    const handleEdit = (transaction: Transaction) => {
+        setEditingTransaction(transaction);
+        setIsEditModalOpen(true);
+    };
+
+    const handleApprove = async (transaction: Transaction) => {
+        try {
+            await updateTransaction(transaction.id, { status: 'Normal' });
+            toast.success('Transaction approved successfully');
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            console.error('Error approving transaction:', error);
+            toast.error('Failed to approve transaction. Please try again.');
+        }
+    };
+
+    const handleDeleteClick = (transaction: Transaction) => {
+        setTransactionToDelete(transaction);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!transactionToDelete) return;
+
+        try {
+            await deleteTransaction(transactionToDelete.id);
+            toast.success('Transaction deleted successfully');
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            console.error('Error deleting transaction:', error);
+            toast.error('Failed to delete transaction. Please try again.');
+        } finally {
+            setIsDeleteDialogOpen(false);
+            setTransactionToDelete(null);
+        }
+    };
+
+    const handleEditSuccess = () => {
+        if (onRefresh) onRefresh();
+        setIsEditModalOpen(false);
+        setEditingTransaction(null);
     };
 
     return (
@@ -77,8 +138,7 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
                                 </TableCell>
                                 <TableCell className={cn(
                                     "text-right font-medium",
-                                    transaction.type === 'Income' ? "text-income-600 dark:text-income-400" :
-                                        transaction.type === 'Expense' ? "text-expense-600 dark:text-expense-400" : ""
+                                    getTransactionTypeColor(transaction.type)
                                 )}>
                                     {transaction.type === 'Income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
                                 </TableCell>
@@ -92,14 +152,29 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
                                         {transaction.status === 'Flagged' && (
-                                            <Button variant="ghost" size="icon" title="Approve">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Approve"
+                                                onClick={() => handleApprove(transaction)}
+                                            >
                                                 <CheckCircle className="h-4 w-4 text-green-500" />
                                             </Button>
                                         )}
-                                        <Button variant="ghost" size="icon" title="Edit">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Edit"
+                                            onClick={() => handleEdit(transaction)}
+                                        >
                                             <Edit2 className="h-4 w-4 text-muted-foreground" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" title="Delete">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Delete"
+                                            onClick={() => handleDeleteClick(transaction)}
+                                        >
                                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                                         </Button>
                                     </div>
@@ -135,6 +210,45 @@ export function TransactionsTable({ transactions, isLoading }: TransactionsTable
                     </Button>
                 </div>
             )}
+
+            {/* Edit Transaction Modal */}
+            <EditTransactionModal
+                transaction={editingTransaction}
+                isOpen={isEditModalOpen}
+                onClose={() => {
+                    setIsEditModalOpen(false);
+                    setEditingTransaction(null);
+                }}
+                onSuccess={handleEditSuccess}
+            />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this transaction?
+                            <br />
+                            <br />
+                            <strong>{transactionToDelete?.description || 'No description'}</strong>
+                            <br />
+                            Amount: {transactionToDelete && formatCurrency(transactionToDelete.amount)}
+                            <br />
+                            Date: {transactionToDelete && new Date(transactionToDelete.date).toLocaleDateString()}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteConfirm}
+                            className="bg-red-500 hover:bg-red-600"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

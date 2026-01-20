@@ -21,3 +21,6 @@ pydantic-settings==2.1.0
 
 # Rate limiting
 slowapi==0.1.9
+
+# Market data
+yfinance==0.2.40

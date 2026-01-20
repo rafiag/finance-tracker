@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google"; // Using Google Fonts
+import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { Toaster } from "sonner";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const fontSans = Inter({
   variable: "--font-sans",
@@ -27,15 +29,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${fontSans.variable} ${fontDisplay.variable} anti-aliased bg-background text-foreground flex min-h-screen font-sans`}
+        className={`${fontSans.variable} ${fontDisplay.variable} antialiased bg-background text-foreground flex min-h-screen font-sans`}
       >
         <Sidebar />
-        <main className="flex-1 flex flex-col ml-64 min-h-screen">
+        <main className="flex-1 flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <div className="flex-1 p-6 overflow-auto">
-            {children}
+          <div className="flex-1 overflow-auto">
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </div>
         </main>
+        <Toaster position="top-right" richColors closeButton />
       </body>
     </html>
   );

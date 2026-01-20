@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowDownIcon, ArrowUpIcon, Wallet, PiggyBank, CreditCard } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { DashboardSummary, Account } from "@/lib/services";
+import { Summary, Account } from "@/lib/services";
 
 interface IncomeCardProps {
-    data: DashboardSummary['income'];
+    data: Summary['income'];
 }
 
 export function IncomeCard({ data }: IncomeCardProps) {

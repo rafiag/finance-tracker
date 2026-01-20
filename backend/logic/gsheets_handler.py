@@ -479,6 +479,223 @@ class GoogleSheetsHandler:
         worksheet.delete_rows(row_index)
         return True
 
+    # =============================================================================
+    # Accounts CRUD Operations
+    # =============================================================================
+
+    def add_account(self, name: str, account_type: str, currency: str = 'IDR') -> bool:
+        """Add a new account to the Accounts sheet."""
+        worksheet = self._get_worksheet(self.TAB_ACCOUNTS)
+
+        # Check if account already exists
+        existing = self.get_accounts()
+        if any(acc['name'] == name for acc in existing):
+            raise ValueError(f"Account '{name}' already exists")
+
+        # Append new row
+        worksheet.append_row([name, account_type, currency, 0])
+        return True
+
+    def update_account(self, old_name: str, new_name: str = None, account_type: str = None,
+                      balance: float = None) -> dict:
+        """
+        Update an account's details.
+        Returns dict with 'renamed' flag and optional 'adjustment_amount' if balance changed.
+        """
+        worksheet = self._get_worksheet(self.TAB_ACCOUNTS)
+        records = worksheet.get_all_records()
+
+        # Find row index
+        row_index = None
+        current_balance = None
+        for i, record in enumerate(records):
+            if record.get('Account Name') == old_name:
+                row_index = i + 2
+                current_balance = float(record.get('Balance', 0) or 0)
+                break
+
+        if not row_index:
+            raise ValueError(f"Account '{old_name}' not found")
+
+        result = {'renamed': False, 'adjustment_amount': None}
+
+        # Update account name
+        if new_name and new_name != old_name:
+            worksheet.update_cell(row_index, 1, new_name)
+            result['renamed'] = True
+
+            # Update all transactions with old account name
+            trans_worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+            trans_records = trans_worksheet.get_all_records()
+            for i, trans in enumerate(trans_records):
+                if trans.get('Account') == old_name:
+                    trans_worksheet.update_cell(i + 2, 3, new_name)  # Column C is Account
+
+        # Update account type
+        if account_type:
+            worksheet.update_cell(row_index, 2, account_type)
+
+        # Update balance (only for non-investment accounts)
+        if balance is not None and current_balance != balance:
+            worksheet.update_cell(row_index, 4, balance)
+            result['adjustment_amount'] = balance - current_balance
+
+        return result
+
+    def delete_account(self, name: str) -> None:
+        """
+        Delete an account and reassign its transactions to 'Uncategorized'.
+        """
+        worksheet = self._get_worksheet(self.TAB_ACCOUNTS)
+        records = worksheet.get_all_records()
+
+        # Find row index
+        row_index = None
+        for i, record in enumerate(records):
+            if record.get('Account Name') == name:
+                row_index = i + 2
+                break
+
+        if not row_index:
+            raise ValueError(f"Account '{name}' not found")
+
+        # Reassign transactions to 'Uncategorized'
+        trans_worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+        trans_records = trans_worksheet.get_all_records()
+        for i, trans in enumerate(trans_records):
+            if trans.get('Account') == name:
+                trans_worksheet.update_cell(i + 2, 3, 'Uncategorized')
+
+        # Ensure 'Uncategorized' account exists
+        existing = self.get_accounts()
+        if not any(acc['name'] == 'Uncategorized' for acc in existing):
+            self.add_account('Uncategorized', 'Cash', 'IDR')
+
+        # Delete the account row
+        worksheet.delete_rows(row_index)
+
+    # =============================================================================
+    # Categories CRUD Operations
+    # =============================================================================
+
+    def add_category(self, category: str, category_type: str, subcategory: str = '') -> bool:
+        """Add a new category or subcategory to the Categories sheet."""
+        worksheet = self._get_worksheet(self.TAB_CATEGORIES)
+
+        # Check if category already exists
+        existing = self.get_categories()
+        for cat in existing:
+            if cat['category'] == category and cat['subcategory'] == subcategory:
+                raise ValueError(f"Category '{category}' with subcategory '{subcategory}' already exists")
+
+        # Append new row
+        worksheet.append_row([category, subcategory, category_type])
+        return True
+
+    def update_category(self, old_category: str, old_subcategory: str,
+                       new_category: str = None, new_subcategory: str = None) -> bool:
+        """Update a category or subcategory name."""
+        worksheet = self._get_worksheet(self.TAB_CATEGORIES)
+        records = worksheet.get_all_records()
+
+        # Find row index
+        row_index = None
+        for i, record in enumerate(records):
+            if (record.get('Category') == old_category and
+                record.get('Subcategory', '') == old_subcategory):
+                row_index = i + 2
+                break
+
+        if not row_index:
+            raise ValueError(f"Category '{old_category}' / '{old_subcategory}' not found")
+
+        # Update category name
+        if new_category and new_category != old_category:
+            worksheet.update_cell(row_index, 1, new_category)
+
+            # Update all transactions with old category name
+            trans_worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+            trans_records = trans_worksheet.get_all_records()
+            for i, trans in enumerate(trans_records):
+                if trans.get('Category') == old_category:
+                    trans_worksheet.update_cell(i + 2, 4, new_category)
+
+        # Update subcategory name
+        if new_subcategory is not None and new_subcategory != old_subcategory:
+            worksheet.update_cell(row_index, 2, new_subcategory)
+
+            # Update transactions
+            trans_worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+            trans_records = trans_worksheet.get_all_records()
+            for i, trans in enumerate(trans_records):
+                if (trans.get('Category') == (new_category or old_category) and
+                    trans.get('Subcategory', '') == old_subcategory):
+                    trans_worksheet.update_cell(i + 2, 5, new_subcategory)
+
+        return True
+
+    def delete_category(self, category: str, subcategory: str = '') -> None:
+        """
+        Delete a category/subcategory and reassign its transactions to 'Uncategorized'.
+        """
+        worksheet = self._get_worksheet(self.TAB_CATEGORIES)
+        records = worksheet.get_all_records()
+
+        # Find row index
+        row_index = None
+        category_type = None
+        for i, record in enumerate(records):
+            if (record.get('Category') == category and
+                record.get('Subcategory', '') == subcategory):
+                row_index = i + 2
+                category_type = record.get('Type', '')
+                break
+
+        if not row_index:
+            raise ValueError(f"Category '{category}' / '{subcategory}' not found")
+
+        # Reassign transactions to 'Uncategorized'
+        trans_worksheet = self._get_worksheet(self.TAB_TRANSACTIONS)
+        trans_records = trans_worksheet.get_all_records()
+        for i, trans in enumerate(trans_records):
+            if trans.get('Category') == category and trans.get('Subcategory', '') == subcategory:
+                trans_worksheet.update_cell(i + 2, 4, 'Uncategorized')
+                trans_worksheet.update_cell(i + 2, 5, '')
+
+        # Ensure 'Uncategorized' category exists
+        existing = self.get_categories()
+        if not any(cat['category'] == 'Uncategorized' and cat['type'] == category_type for cat in existing):
+            self.add_category('Uncategorized', category_type, '')
+
+        # Delete the category row
+        worksheet.delete_rows(row_index)
+
+    # =============================================================================
+    # Budgets Update Operation
+    # =============================================================================
+
+    def update_budget(self, category: str, monthly_budget: float, effective_from: str) -> bool:
+        """Update or create a budget for a category."""
+        worksheet = self._get_worksheet(self.TAB_BUDGETS)
+        records = worksheet.get_all_records()
+
+        # Find if budget exists
+        row_index = None
+        for i, record in enumerate(records):
+            if record.get('Category') == category:
+                row_index = i + 2
+                break
+
+        if row_index:
+            # Update existing budget
+            worksheet.update_cell(row_index, 2, monthly_budget)
+            worksheet.update_cell(row_index, 3, effective_from)
+        else:
+            # Create new budget
+            worksheet.append_row([category, monthly_budget, effective_from])
+
+        return True
+
 
 @lru_cache()
 def get_sheets_handler() -> GoogleSheetsHandler:
