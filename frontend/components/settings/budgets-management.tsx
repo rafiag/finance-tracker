@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { fetchCategories, updateBudgets, fetchBudgets, Category } from '@/lib/services';
 import { formatCurrency } from '@/lib/utils';
 import { Loader2, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface BudgetRow {
   category: string;
@@ -67,7 +68,7 @@ export function BudgetsManagement() {
       setBudgets(budgetMap);
     } catch (error) {
       console.error('Error loading data:', error);
-      alert('Failed to load budgets');
+      toast.error('Failed to load budgets');
     } finally {
       setIsLoading(false);
     }
@@ -101,16 +102,18 @@ export function BudgetsManagement() {
         }));
 
       if (budgetsArray.length === 0) {
-        alert('No budgets to save. Set budget amounts greater than 0.');
+        toast.info('No budgets to save. Set budget amounts greater than 0.');
         return;
       }
 
       await updateBudgets(budgetsArray);
-      alert(`Successfully updated ${budgetsArray.length} budget(s). Changes will take effect next month.`);
+      toast.success(`Successfully updated ${budgetsArray.length} budget(s). Changes will take effect next month.`, {
+        duration: 5000,
+      });
       loadData(); // Reload to get updated data
     } catch (error) {
       console.error('Error saving budgets:', error);
-      alert('Failed to save budgets');
+      toast.error('Failed to save budgets');
     } finally {
       setIsSaving(false);
     }

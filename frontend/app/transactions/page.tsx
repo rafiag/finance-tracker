@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { TransactionsTable } from "@/components/transactions/transactions-table";
+import { TransactionsTableSkeleton } from "@/components/skeletons/transactions-skeleton";
 import { fetchTransactions, fetchAccounts, fetchCategories, Transaction, Account, Category } from "@/lib/services";
 
 export default function TransactionsPage() {

@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { PiggyBank, CreditCard } from "lucide-react";
 import { IncomeCard, SummaryCard, AccountList } from "@/components/dashboard/dashboard-cards";
 import { ExpenseChart } from "@/components/dashboard/expense-chart";
-import { fetchDashboardSummary, fetchDailyExpenses, fetchAccounts, DashboardSummary, Account } from "@/lib/services";
+import { DashboardSkeleton } from "@/components/skeletons/dashboard-skeleton";
+import { fetchSummary, fetchDailyExpenses, fetchAccounts, Summary, Account } from "@/lib/services";
 
 export default function Dashboard() {
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,10 +17,13 @@ export default function Dashboard() {
     const loadData = async () => {
       setLoading(true);
       try {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+
         // Fetch data in parallel
         const [summaryData, expensesData, accountsData] = await Promise.all([
-          fetchDashboardSummary(),
-          fetchDailyExpenses(),
+          fetchSummary(currentYear, currentMonth),
+          fetchDailyExpenses(currentYear, currentMonth),
           fetchAccounts()
         ]);
 
@@ -37,7 +41,7 @@ export default function Dashboard() {
   }, []);
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center h-full">Loading dashboard...</div>;
+    return <DashboardSkeleton />;
   }
 
   if (!summary) {
@@ -63,18 +67,18 @@ export default function Dashboard() {
         {/* Summary Cards */}
         <SummaryCard
           title="Total Expenses"
-          amount={summary.expenses.total}
-          changePercent={summary.expenses.change_percent}
-          trend={summary.expenses.trend}
+          amount={summary.expense.total}
+          changePercent={summary.expense.change_percent}
+          trend={summary.expense.trend}
           type="expense"
           icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
         />
 
         <SummaryCard
           title="Total Savings"
-          amount={summary.savings.total}
-          changePercent={summary.savings.change_percent}
-          trend={summary.savings.trend}
+          amount={summary.saving.total}
+          changePercent={summary.saving.change_percent}
+          trend={summary.saving.trend}
           type="savings"
           icon={<PiggyBank className="h-4 w-4 text-muted-foreground" />}
         />

@@ -28,6 +28,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   fetchAccounts,
   createAccount,
   updateAccount,
@@ -36,6 +46,7 @@ import {
 } from '@/lib/services';
 import { formatCurrency } from '@/lib/utils';
 import { Plus, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function AccountsManagement() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -44,6 +55,8 @@ export function AccountsManagement() {
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -64,7 +77,7 @@ export function AccountsManagement() {
       setAccounts(data);
     } catch (error) {
       console.error('Error loading accounts:', error);
-      alert('Failed to load accounts');
+      toast.error('Failed to load accounts');
     } finally {
       setIsLoading(false);
     }
@@ -89,21 +102,24 @@ export function AccountsManagement() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (account: Account) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete account "${account.name}"?\n\n` +
-        `All transactions using this account will be reassigned to "Uncategorized".`
-    );
+  const handleDeleteClick = (account: Account) => {
+    setAccountToDelete(account);
+    setIsDeleteDialogOpen(true);
+  };
 
-    if (!confirmed) return;
+  const handleDeleteConfirm = async () => {
+    if (!accountToDelete) return;
 
     try {
-      await deleteAccount(account.name);
-      alert(`Account "${account.name}" deleted successfully`);
+      await deleteAccount(accountToDelete.name);
+      toast.success(`Account "${accountToDelete.name}" deleted successfully`);
       loadAccounts();
     } catch (error) {
       console.error('Error deleting account:', error);
-      alert('Failed to delete account');
+      toast.error('Failed to delete account');
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setAccountToDelete(null);
     }
   };
 
@@ -117,7 +133,7 @@ export function AccountsManagement() {
           type: formData.type,
           currency: formData.currency,
         });
-        alert(`Account "${formData.name}" created successfully`);
+        toast.success(`Account "${formData.name}" created successfully`);
       } else {
         // Edit mode
         const updates: any = {};
@@ -143,14 +159,14 @@ export function AccountsManagement() {
 
           if (result.balance_adjusted) {
             const adjustment = result.adjustment_amount!;
-            alert(
-              `Account updated successfully.\n\n` +
-                `Balance adjustment transaction created: ${
-                  adjustment > 0 ? '+' : ''
-                }${formatCurrency(adjustment)}`
+            toast.success(
+              `Account updated successfully. Balance adjustment transaction created: ${
+                adjustment > 0 ? '+' : ''
+              }${formatCurrency(adjustment)}`,
+              { duration: 5000 }
             );
           } else {
-            alert('Account updated successfully');
+            toast.success('Account updated successfully');
           }
         }
       }
@@ -159,7 +175,7 @@ export function AccountsManagement() {
       loadAccounts();
     } catch (error: any) {
       console.error('Error saving account:', error);
-      alert(error?.message || 'Failed to save account');
+      toast.error(error?.message || 'Failed to save account');
     } finally {
       setIsSaving(false);
     }
@@ -218,7 +234,7 @@ export function AccountsManagement() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(account)}
+                        onClick={() => handleDeleteClick(account)}
                         title="Delete"
                       >
                         <Trash2 className="h-4 w-4 text-red-500" />
@@ -335,6 +351,27 @@ export function AccountsManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete account "{accountToDelete?.name}"?
+              <br />
+              <br />
+              All transactions using this account will be reassigned to "Uncategorized".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-500 hover:bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

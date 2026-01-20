@@ -22,6 +22,7 @@ import {
 import { Transaction, updateTransaction, fetchAccounts, fetchCategories } from '@/lib/services';
 import { formatDateForInput } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface EditTransactionModalProps {
   transaction: Transaction | null;
@@ -88,16 +89,17 @@ export function EditTransactionModal({
 
       // Validate required fields
       if (!formData.date || !formData.account || !formData.category || !formData.amount) {
-        alert('Please fill in all required fields');
+        toast.error('Please fill in all required fields');
         return;
       }
 
       await updateTransaction(transaction.id, formData);
+      toast.success('Transaction updated successfully');
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Error updating transaction:', error);
-      alert('Failed to update transaction. Please try again.');
+      toast.error('Failed to update transaction. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -109,11 +111,12 @@ export function EditTransactionModal({
     try {
       setIsSaving(true);
       await updateTransaction(transaction.id, { status: 'Normal' });
+      toast.success('Transaction approved successfully');
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Error approving transaction:', error);
-      alert('Failed to approve transaction. Please try again.');
+      toast.error('Failed to approve transaction. Please try again.');
     } finally {
       setIsSaving(false);
     }

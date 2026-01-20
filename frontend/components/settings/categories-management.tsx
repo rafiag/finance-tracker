@@ -20,6 +20,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   fetchCategories,
   createCategory,
   updateCategory,
@@ -27,6 +37,7 @@ import {
   Category,
 } from '@/lib/services';
 import { Plus, Edit2, Trash2, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface CategoryNode {
   category: string;
@@ -42,6 +53,12 @@ export function CategoriesManagement() {
   const [modalType, setModalType] = useState<'category' | 'subcategory'>('category');
   const [isSaving, setIsSaving] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{
+    category: string;
+    subcategory: string;
+    type: string;
+  } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -69,7 +86,7 @@ export function CategoriesManagement() {
       setCategories(data);
     } catch (error) {
       console.error('Error loading categories:', error);
-      alert('Failed to load categories');
+      toast.error('Failed to load categories');
     } finally {
       setIsLoading(false);
     }
@@ -153,22 +170,27 @@ export function CategoriesManagement() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (category: string, subcategory: string = '') => {
-    const itemName = subcategory ? `subcategory "${subcategory}"` : `category "${category}"`;
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${itemName}?\n\n` +
-        `All transactions using this ${subcategory ? 'subcategory' : 'category'} will be reassigned to "Uncategorized".`
-    );
+  const handleDeleteClick = (category: string, type: string, subcategory: string = '') => {
+    setItemToDelete({ category, subcategory, type });
+    setIsDeleteDialogOpen(true);
+  };
 
-    if (!confirmed) return;
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return;
+
+    const { category, subcategory } = itemToDelete;
+    const itemName = subcategory ? `subcategory "${subcategory}"` : `category "${category}"`;
 
     try {
       await deleteCategory(category, subcategory);
-      alert(`${itemName} deleted successfully`);
+      toast.success(`${itemName} deleted successfully`);
       loadCategories();
     } catch (error) {
       console.error('Error deleting category:', error);
-      alert(`Failed to delete ${itemName}`);
+      toast.error(`Failed to delete ${itemName}`);
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setItemToDelete(null);
     }
   };
 
@@ -183,14 +205,14 @@ export function CategoriesManagement() {
             type: formData.type,
             subcategory: '',
           });
-          alert(`Category "${formData.category}" created successfully`);
+          toast.success(`Category "${formData.category}" created successfully`);
         } else {
           await createCategory({
             category: formData.parentCategory,
             type: formData.type,
             subcategory: formData.subcategory,
           });
-          alert(`Subcategory "${formData.subcategory}" created successfully`);
+          toast.success(`Subcategory "${formData.subcategory}" created successfully`);
         }
       } else {
         // Edit mode
@@ -198,12 +220,12 @@ export function CategoriesManagement() {
           await updateCategory(editingItem!.category, '', {
             new_category: formData.category,
           });
-          alert('Category updated successfully');
+          toast.success('Category updated successfully');
         } else {
           await updateCategory(editingItem!.category, editingItem!.subcategory, {
             new_subcategory: formData.subcategory,
           });
-          alert('Subcategory updated successfully');
+          toast.success('Subcategory updated successfully');
         }
       }
 
@@ -211,7 +233,7 @@ export function CategoriesManagement() {
       loadCategories();
     } catch (error: any) {
       console.error('Error saving category:', error);
-      alert(error?.message || 'Failed to save category');
+      toast.error(error?.message || 'Failed to save category');
     } finally {
       setIsSaving(false);
     }
@@ -282,7 +304,7 @@ export function CategoriesManagement() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(node.category)}
+                        onClick={() => handleDeleteClick(node.category, 'Income')}
                       >
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
@@ -310,7 +332,7 @@ export function CategoriesManagement() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => handleDelete(node.category, sub)}
+                              onClick={() => handleDeleteClick(node.category, 'Income', sub)}
                             >
                               <Trash2 className="h-3 w-3 text-red-500" />
                             </Button>
@@ -385,7 +407,7 @@ export function CategoriesManagement() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(node.category)}
+                        onClick={() => handleDeleteClick(node.category, 'Expense')}
                       >
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
@@ -413,7 +435,7 @@ export function CategoriesManagement() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => handleDelete(node.category, sub)}
+                              onClick={() => handleDeleteClick(node.category, 'Expense', sub)}
                             >
                               <Trash2 className="h-3 w-3 text-red-500" />
                             </Button>
@@ -498,6 +520,37 @@ export function CategoriesManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {itemToDelete?.subcategory ? 'Subcategory' : 'Category'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{' '}
+              {itemToDelete?.subcategory
+                ? `subcategory "${itemToDelete.subcategory}"`
+                : `category "${itemToDelete?.category}"`}
+              ?
+              <br />
+              <br />
+              All transactions using this {itemToDelete?.subcategory ? 'subcategory' : 'category'}{' '}
+              will be reassigned to "Uncategorized".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

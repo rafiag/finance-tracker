@@ -13,6 +13,18 @@ import { Transaction, deleteTransaction, updateTransaction } from "@/lib/service
 import { Edit2, Trash2, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EditTransactionModal } from "./edit-transaction-modal";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { TransactionsTableSkeleton } from "@/components/skeletons/transactions-skeleton";
 
 interface TransactionsTableProps {
     transactions: Transaction[];
@@ -24,10 +36,12 @@ export function TransactionsTable({ transactions, isLoading, onRefresh }: Transa
     const [currentPage, setCurrentPage] = useState(1);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
     const itemsPerPage = 20;
 
     if (isLoading) {
-        return <div className="p-4 text-center">Loading transactions...</div>;
+        return <TransactionsTableSkeleton />;
     }
 
     if (transactions.length === 0) {
@@ -54,29 +68,32 @@ export function TransactionsTable({ transactions, isLoading, onRefresh }: Transa
     const handleApprove = async (transaction: Transaction) => {
         try {
             await updateTransaction(transaction.id, { status: 'Normal' });
+            toast.success('Transaction approved successfully');
             if (onRefresh) onRefresh();
         } catch (error) {
             console.error('Error approving transaction:', error);
-            alert('Failed to approve transaction. Please try again.');
+            toast.error('Failed to approve transaction. Please try again.');
         }
     };
 
-    const handleDelete = async (transaction: Transaction) => {
-        const confirmed = window.confirm(
-            `Are you sure you want to delete this transaction?\n\n` +
-            `${transaction.description || 'No description'}\n` +
-            `Amount: ${formatCurrency(transaction.amount)}\n` +
-            `Date: ${new Date(transaction.date).toLocaleDateString()}`
-        );
+    const handleDeleteClick = (transaction: Transaction) => {
+        setTransactionToDelete(transaction);
+        setIsDeleteDialogOpen(true);
+    };
 
-        if (!confirmed) return;
+    const handleDeleteConfirm = async () => {
+        if (!transactionToDelete) return;
 
         try {
-            await deleteTransaction(transaction.id);
+            await deleteTransaction(transactionToDelete.id);
+            toast.success('Transaction deleted successfully');
             if (onRefresh) onRefresh();
         } catch (error) {
             console.error('Error deleting transaction:', error);
-            alert('Failed to delete transaction. Please try again.');
+            toast.error('Failed to delete transaction. Please try again.');
+        } finally {
+            setIsDeleteDialogOpen(false);
+            setTransactionToDelete(null);
         }
     };
 
@@ -156,7 +173,7 @@ export function TransactionsTable({ transactions, isLoading, onRefresh }: Transa
                                             variant="ghost"
                                             size="icon"
                                             title="Delete"
-                                            onClick={() => handleDelete(transaction)}
+                                            onClick={() => handleDeleteClick(transaction)}
                                         >
                                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                                         </Button>
@@ -204,6 +221,34 @@ export function TransactionsTable({ transactions, isLoading, onRefresh }: Transa
                 }}
                 onSuccess={handleEditSuccess}
             />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this transaction?
+                            <br />
+                            <br />
+                            <strong>{transactionToDelete?.description || 'No description'}</strong>
+                            <br />
+                            Amount: {transactionToDelete && formatCurrency(transactionToDelete.amount)}
+                            <br />
+                            Date: {transactionToDelete && new Date(transactionToDelete.date).toLocaleDateString()}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteConfirm}
+                            className="bg-red-500 hover:bg-red-600"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

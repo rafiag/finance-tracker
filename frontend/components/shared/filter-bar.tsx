@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { X, Search } from "lucide-react";
-import { debounce } from "@/lib/utils";
+import { debounce, getYearOptions } from "@/lib/utils";
 
 interface FilterBarProps {
     showDateFilter?: boolean;
@@ -106,9 +106,11 @@ export function FilterBar({
                             <SelectValue placeholder="Year" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="2024">2024</SelectItem>
-                            <SelectItem value="2025">2025</SelectItem>
-                            <SelectItem value="2026">2026</SelectItem>
+                            {getYearOptions(2020).map((yearOption) => (
+                                <SelectItem key={yearOption} value={yearOption.toString()}>
+                                    {yearOption}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
 

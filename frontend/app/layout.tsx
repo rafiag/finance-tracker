@@ -3,6 +3,8 @@ import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { Toaster } from "sonner";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const fontSans = Inter({
   variable: "--font-sans",
@@ -33,9 +35,12 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col lg:ml-64 min-h-screen">
           <Header />
           <div className="flex-1 overflow-auto">
-            {children}
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </div>
         </main>
+        <Toaster position="top-right" richColors closeButton />
       </body>
     </html>
   );
